@@ -219,13 +219,25 @@
         </div>
       </div>
     </section>
+
+    <transition name="preview-home-dock">
+      <div v-if="showPreviewExit" class="preview-home-dock">
+        <div class="preview-home-panel">
+          <span class="preview-home-label">预览模式</span>
+          <button class="btn btn-primary preview-home-btn" @click="exitPreviewFromHome">
+            退出预览
+          </button>
+        </div>
+      </div>
+    </transition>
   </div>
 </template>
 
 <script>
-import { inject } from 'vue'
+import { inject, ref, onMounted, onBeforeUnmount } from 'vue'
 import { Calendar } from '../utils/calendar'
-import { eventBus } from '../utils/eventBus'
+import { eventBus, showToast } from '../utils/eventBus'
+import { getPersonalization, applyTheme, applyBackground, exitPreviewMode, isPreviewModeActive } from '../utils/personalization.js'
 
 const HOME_CONTENT = {
   zh: {
@@ -386,7 +398,31 @@ export default {
   name: 'Home',
   setup() {
     const i18n = inject('i18n')
-    return { i18n }
+    const personalization = ref(getPersonalization())
+    const previewMode = ref(isPreviewModeActive())
+    
+    // 监听个性化配置变化
+    const handlePersonalizationChange = (e) => {
+      personalization.value = e.detail
+      applyTheme(e.detail.theme, e.detail.site)
+      applyBackground(e.detail.background)
+    }
+
+    const handlePreviewModeChange = (e) => {
+      previewMode.value = Boolean(e.detail?.active)
+    }
+    
+    onMounted(() => {
+      window.addEventListener('personalization-changed', handlePersonalizationChange)
+      window.addEventListener('personalization-preview-changed', handlePreviewModeChange)
+    })
+    
+    onBeforeUnmount(() => {
+      window.removeEventListener('personalization-changed', handlePersonalizationChange)
+      window.removeEventListener('personalization-preview-changed', handlePreviewModeChange)
+    })
+    
+    return { i18n, personalization, previewMode }
   },
   data() {
     return {
@@ -416,6 +452,10 @@ export default {
       return this.content.cards
     },
     slides() {
+      // 优先使用个性化配置中的轮播图
+      if (this.personalization.hero && Array.isArray(this.personalization.hero.slides) && this.personalization.hero.slides.length > 0) {
+        return this.personalization.hero.slides
+      }
       return this.content.slides
     },
     weekdays() {
@@ -425,6 +465,14 @@ export default {
       return this.content.styleTabs
     },
     galleryItems() {
+      // 优先使用个性化配置中的作品
+      if (this.personalization.gallery && this.personalization.gallery.works) {
+        return this.personalization.gallery.works.map(work => ({
+          ...work,
+          category: 'all',
+          desc: work.category
+        }))
+      }
       return this.content.galleryItems
     },
     quickNavs() {
@@ -534,6 +582,9 @@ export default {
       }
       
       return available
+    },
+    showPreviewExit() {
+      return this.previewMode || this.$route.query.preview === '1'
     }
   },
   mounted() {
@@ -692,6 +743,14 @@ export default {
     },
     openLightbox(src) {
       eventBus.emit('open-lightbox', src)
+    },
+    async exitPreviewFromHome() {
+      exitPreviewMode()
+      await this.$router.push({
+        path: '/personalization',
+        query: { from: 'preview' }
+      })
+      showToast('已退出预览模式', 'success')
     }
   }
 }
@@ -1365,9 +1424,70 @@ export default {
   margin: 0 auto;
 }
 
+.preview-home-dock {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 5000;
+}
+
+.preview-home-panel {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(17, 24, 39, 0.94), rgba(31, 41, 55, 0.92));
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(12px);
+}
+
+.preview-home-label {
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.preview-home-btn {
+  min-width: 168px;
+  box-shadow: none;
+}
+
+.preview-home-dock-enter-active,
+.preview-home-dock-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.preview-home-dock-enter-from,
+.preview-home-dock-leave-to {
+  opacity: 0;
+  transform: translate(-50%, 16px);
+}
+
 @media (max-width: 768px) {
   .quick-nav-grid {
     grid-template-columns: 1fr;
+  }
+
+  .preview-home-dock {
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+    transform: none;
+  }
+
+  .preview-home-panel {
+    width: 100%;
+    justify-content: space-between;
+    border-radius: 20px;
+  }
+
+  .preview-home-btn {
+    min-width: 0;
   }
 }
 

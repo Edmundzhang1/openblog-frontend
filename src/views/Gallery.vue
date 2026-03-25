@@ -42,7 +42,8 @@
 
 <script>
 import { eventBus } from '../utils/eventBus'
-import { inject } from 'vue'
+import { inject, ref, onMounted, onBeforeUnmount } from 'vue'
+import { getPersonalization } from '../utils/personalization.js'
 
 const GALLERY_CONTENT = {
   zh: {
@@ -109,7 +110,21 @@ export default {
   name: 'Gallery',
   setup() {
     const i18n = inject('i18n')
-    return { i18n }
+    const personalization = ref(getPersonalization())
+    
+    const handlePersonalizationChange = (e) => {
+      personalization.value = e.detail
+    }
+    
+    onMounted(() => {
+      window.addEventListener('personalization-changed', handlePersonalizationChange)
+    })
+    
+    onBeforeUnmount(() => {
+      window.removeEventListener('personalization-changed', handlePersonalizationChange)
+    })
+    
+    return { i18n, personalization }
   },
   data() {
     return {
@@ -122,7 +137,16 @@ export default {
       return this.i18n.getLocale()
     },
     content() {
-      return GALLERY_CONTENT[this.locale]
+      const config = GALLERY_CONTENT[this.locale]
+      // 使用个性化配置中的标题
+      if (this.personalization.gallery) {
+        return {
+          ...config,
+          title: this.personalization.gallery.title || config.title,
+          subtitle: this.personalization.gallery.subtitle || config.subtitle
+        }
+      }
+      return config
     },
     filters() {
       return this.content.filters

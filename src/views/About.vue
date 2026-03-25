@@ -84,7 +84,8 @@
 </template>
 
 <script>
-import { inject } from 'vue'
+import { inject, ref, onMounted, onBeforeUnmount } from 'vue'
+import { getPersonalization } from '../utils/personalization.js'
 
 const ABOUT_CONTENT = {
   zh: {
@@ -189,7 +190,21 @@ export default {
   name: 'About',
   setup() {
     const i18n = inject('i18n')
-    return { i18n }
+    const personalization = ref(getPersonalization())
+    
+    const handlePersonalizationChange = (e) => {
+      personalization.value = e.detail
+    }
+    
+    onMounted(() => {
+      window.addEventListener('personalization-changed', handlePersonalizationChange)
+    })
+    
+    onBeforeUnmount(() => {
+      window.removeEventListener('personalization-changed', handlePersonalizationChange)
+    })
+    
+    return { i18n, personalization }
   },
   data() {
     return {

@@ -9,6 +9,7 @@ import Login from '../views/Login.vue'
 import OrderTracking from '../views/OrderTracking.vue'
 import Blog from '../views/Blog.vue'
 import AdminDashboard from '../views/AdminDashboard.vue'
+import Personalization from '../views/Personalization.vue'
 import { getCurrentUser, getPostLoginRoute, isAdmin, isAuthenticated } from '../utils/auth'
 
 const routes = [
@@ -69,6 +70,11 @@ const routes = [
     name: 'Admin',
     component: AdminDashboard,
     meta: { requiresAuth: true, requiresAdmin: true }
+  },
+  {
+    path: '/personalization',
+    name: 'Personalization',
+    component: Personalization
   }
 ]
 

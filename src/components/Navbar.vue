@@ -2,8 +2,8 @@
   <nav class="navbar">
     <div class="container">
       <router-link to="/" class="logo">
-        <img v-if="logoExists" :src="logoUrl" alt="FUREST" @error="logoExists = false">
-        <span>FUREST</span>
+        <img v-if="showLogo" :src="logoUrl" alt="logo" :style="logoImageStyle" @error="handleLogoError">
+        <span>{{ personalization.site?.name || 'FUREST' }}</span>
       </router-link>
       
       <div class="nav-links">
@@ -14,6 +14,11 @@
         <router-link to="/blog">{{ $t('nav.blog') }}</router-link>
         <router-link to="/about">{{ $t('nav.about') }}</router-link>
         <router-link to="/contact">{{ $t('nav.contact') }}</router-link>
+
+        <!-- 个性化设置 -->
+        <router-link to="/personalization" class="settings-btn" :title="$t('nav.personalization')">
+          {{ $t('nav.personalization') }}
+        </router-link>
 
         <!-- 语言切换 -->
         <div class="dropdown lang-dropdown" @mouseenter="showLangDropdown = true" @mouseleave="showLangDropdown = false">
@@ -82,26 +87,44 @@
 </template>
 
 <script>
-import { inject, ref, computed, onMounted, onUnmounted } from 'vue'
+import { inject, ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from '../utils/eventBus'
 import { AUTH_CHANGED_EVENT, clearSession, getCurrentUser, isAuthenticated } from '../utils/auth'
+import { getPersonalization } from '../utils/personalization.js'
 
 export default {
   name: 'Navbar',
   setup() {
     const router = useRouter()
     const i18n = inject('i18n')
+    const personalization = ref(getPersonalization())
     
     const showLangDropdown = ref(false)
     const showUserDropdown = ref(false)
     const showMobileMenu = ref(false)
-    const logoExists = ref(true)
-    const logoUrl = '/src/assets/images/logo.png'
+    const logoLoadFailed = ref(false)
+    const logoUrl = computed(() => (personalization.value.site?.logo || '').trim())
+    const logoSize = computed(() => {
+      const numericSize = Number(personalization.value.site?.logoSize)
+      if (!Number.isFinite(numericSize)) return 56
+      return Math.min(Math.max(Math.round(numericSize), 28), 120)
+    })
+    const showLogo = computed(() => Boolean(logoUrl.value) && !logoLoadFailed.value)
+    const logoImageStyle = computed(() => ({
+      width: `${logoSize.value}px`,
+      height: `${logoSize.value}px`
+    }))
     const isLoggedIn = ref(false)
     const userName = ref('')
     const userRole = ref('guest')
-    const userAvatar = ref('https://via.placeholder.com/40')
+    const userAvatar = computed(() => {
+      // 优先使用个性化配置中的头像
+      if (personalization.value.profile && personalization.value.profile.avatar) {
+        return personalization.value.profile.avatar
+      }
+      return 'https://via.placeholder.com/40'
+    })
     
     // 计算当前语言显示
     const currentLang = computed(() => {
@@ -166,21 +189,37 @@ export default {
       checkLoginStatus()
     }
     
+    const handlePersonalizationChange = (e) => {
+      personalization.value = e.detail
+    }
+
+    const handleLogoError = () => {
+      logoLoadFailed.value = true
+    }
+
+    watch(logoUrl, () => {
+      logoLoadFailed.value = false
+    })
+    
     onMounted(() => {
       checkLoginStatus()
       window.addEventListener(AUTH_CHANGED_EVENT, handleAuthChanged)
+      window.addEventListener('personalization-changed', handlePersonalizationChange)
     })
 
     onUnmounted(() => {
       window.removeEventListener(AUTH_CHANGED_EVENT, handleAuthChanged)
+      window.removeEventListener('personalization-changed', handlePersonalizationChange)
     })
     
     return {
       showLangDropdown,
       showUserDropdown,
       showMobileMenu,
-      logoExists,
+      showLogo,
       logoUrl,
+      logoImageStyle,
+      handleLogoError,
       isLoggedIn,
       userName,
       userRole,
@@ -191,7 +230,8 @@ export default {
       currentLang,
       currentLocale,
       changeLocale,
-      logout
+      logout,
+      personalization
     }
   }
 }
@@ -210,7 +250,9 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  height: 70px;
+  min-height: 70px;
+  padding-top: 10px;
+  padding-bottom: 10px;
 }
 
 .logo {
@@ -224,10 +266,15 @@ export default {
 }
 
 .logo img {
-  width: 40px;
-  height: 40px;
   object-fit: contain;
   border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+  transform-origin: center;
+}
+
+.logo:hover img {
+  transform: scale(1.06);
 }
 
 .nav-links {
@@ -376,6 +423,39 @@ export default {
 
 .btn-login-link::after {
   display: none !important;
+}
+
+/* 个性化设置按钮 */
+.settings-btn {
+  font-size: 0.95rem;
+  padding: 8px 15px;
+  border-radius: var(--radius-sm);
+  transition: var(--transition);
+  background: var(--primary-color);
+  color: var(--white) !important;
+  font-weight: 500;
+}
+
+.settings-btn:hover,
+.settings-btn.router-link-active,
+.settings-btn.router-link-exact-active {
+  background: var(--primary-dark);
+  color: var(--white) !important;
+  transform: translateY(-2px);
+}
+
+.settings-btn::after {
+  display: none !important;
+}
+
+/* 移动端个性化菜单链接 */
+.mobile-settings-link {
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--accent-color) 100%);
+  color: var(--white) !important;
+  border-radius: var(--radius-sm);
+  margin: 5px 0;
+  text-align: center;
+  font-weight: 500;
 }
 
 /* 移动端菜单按钮 */
