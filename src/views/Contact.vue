@@ -1,20 +1,23 @@
 <template>
   <div class="contact-page">
-    <header class="page-header">
+    <header class="page-header fade-in">
       <div class="container">
         <h1>{{ content.title }}</h1>
         <p>{{ content.subtitle }}</p>
       </div>
     </header>
 
-    <section class="contact-section">
+    <section class="contact-section fade-in">
       <div class="container">
         <div class="contact-grid">
           <div v-for="contact in contacts" :key="contact.key" :class="['contact-card', contact.key]">
-            <div class="contact-icon">{{ contact.icon }}</div>
+            <div class="contact-icon">
+              <FilePlus2 v-if="contact.key === 'commission'" :size="32" aria-hidden="true" />
+              <MessageCircle v-else :size="32" aria-hidden="true" />
+            </div>
             <h3>{{ contact.name }}</h3>
             <p>{{ contact.desc }}</p>
-            <a :href="contact.url" target="_blank" class="btn btn-outline">{{ contact.btnText }}</a>
+            <router-link :to="contact.route" class="btn btn-outline">{{ contact.btnText }}</router-link>
           </div>
         </div>
 
@@ -35,119 +38,84 @@
 
 <script>
 import { inject } from 'vue'
+import { FilePlus2, MessageCircle } from '@lucide/vue'
 
 const CONTACT_CONTENT = {
   zh: {
     title: '联系我们',
-    subtitle: '通过以下平台找到我们，随时欢迎咨询',
+    subtitle: '从委托需求到订单沟通，都可以直接在站内完成',
     faqTitle: '常见问题',
     contacts: [
       {
-        key: 'qq',
-        name: 'QQ',
-        icon: '💬',
-        desc: '工作日 9:00-21:00\n快速响应咨询',
-        url: 'https://wpa.qq.com/msgrd?v=3&uin=123456789&site=qq&menu=yes',
-        btnText: '添加QQ'
+        key: 'commission',
+        name: '提交委托',
+        desc: '填写创作需求、预算和期望时间\n创建可追踪的正式委托',
+        route: '/commission',
+        btnText: '发起委托'
       },
       {
-        key: 'xiaohongshu',
-        name: '小红书',
-        icon: '📕',
-        desc: '查看最新作品\n关注创作日常',
-        url: 'https://xiaohongshu.com',
-        btnText: '关注小红书'
-      },
-      {
-        key: 'x',
-        name: 'X (Twitter)',
-        icon: '𝕏',
-        desc: '国际平台\n作品同步更新',
-        url: 'https://x.com',
-        btnText: '关注X'
-      },
-      {
-        key: 'bilibili',
-        name: 'Bilibili',
-        icon: '📺',
-        desc: '绘画过程视频\n直播预告通知',
-        url: 'https://space.bilibili.com',
-        btnText: '访问主页'
+        key: 'chat',
+        name: '订单沟通',
+        desc: '围绕已有委托发送消息和附件\n沟通记录与订单关联保存',
+        route: '/chat',
+        btnText: '进入沟通'
       }
     ],
     faqs: [
       {
         question: '委托需要提前多久预约？',
-        answer: '建议提前1-2周预约，热门档期可能需要更长时间。可在排单日历查看当前排单情况。'
+        answer: '交付时间由画师结合当前工作量和需求复杂度确认。提交委托时请填写期望时间，并以订单中的最终约定为准。'
       },
       {
         question: '可以修改多少次？',
-        answer: '草稿阶段可无限修改至满意，上色后小范围修改免费，大范围修改可能产生额外费用。'
+        answer: '修改范围和次数以订单约定为准。建议在确认委托前写清要求，并在订单沟通中保留变更记录。'
       },
       {
         question: '支持哪些支付方式？',
-        answer: '支持支付宝、微信支付、银行转账等多种支付方式。'
+        answer: '具体支付方式由委托双方确认。平台负责记录订单的报价、支付状态和交付进度，不会在未确认前代为承诺付款渠道。'
       },
       {
         question: '作品的版权归属？',
-        answer: '个人使用委托版权归委托人所有；商业用途需提前说明并协商版权费用。'
+        answer: '版权和使用范围以委托双方的约定为准。涉及商业使用、转载或二次授权时，请在下单前明确写入需求。'
       }
     ]
   },
   en: {
     title: 'Contact',
-    subtitle: 'Find us on the platforms below and feel free to reach out anytime',
+    subtitle: 'Submit a request and keep order conversations together on the platform',
     faqTitle: 'FAQ',
     contacts: [
       {
-        key: 'qq',
-        name: 'QQ',
-        icon: '💬',
-        desc: 'Weekdays 9:00-21:00\nFast response for inquiries',
-        url: 'https://wpa.qq.com/msgrd?v=3&uin=123456789&site=qq&menu=yes',
-        btnText: 'Add on QQ'
+        key: 'commission',
+        name: 'Submit a Commission',
+        desc: 'Describe your requirements, budget, and timeline\nCreate a request you can track',
+        route: '/commission',
+        btnText: 'Start Commission'
       },
       {
-        key: 'xiaohongshu',
-        name: 'Xiaohongshu',
-        icon: '📕',
-        desc: 'See the latest artworks\nFollow our creative updates',
-        url: 'https://xiaohongshu.com',
-        btnText: 'Follow on Xiaohongshu'
-      },
-      {
-        key: 'x',
-        name: 'X (Twitter)',
-        icon: '𝕏',
-        desc: 'International platform\nWorks updated in sync',
-        url: 'https://x.com',
-        btnText: 'Follow on X'
-      },
-      {
-        key: 'bilibili',
-        name: 'Bilibili',
-        icon: '📺',
-        desc: 'Drawing process videos\nLivestream announcements',
-        url: 'https://space.bilibili.com',
-        btnText: 'Visit Channel'
+        key: 'chat',
+        name: 'Order Conversation',
+        desc: 'Send messages and attachments for an existing request\nKeep the discussion linked to the order',
+        route: '/chat',
+        btnText: 'Open Conversations'
       }
     ],
     faqs: [
       {
         question: 'How far in advance should I book a commission?',
-        answer: 'Booking 1-2 weeks in advance is recommended. Popular slots may require even more lead time. You can check the current schedule in the calendar.'
+        answer: 'The artist confirms delivery timing based on current workload and request complexity. Include your preferred date when submitting and rely on the final order agreement.'
       },
       {
         question: 'How many revisions are included?',
-        answer: 'Draft revisions are flexible until the direction is confirmed. Minor revisions after coloring are free, while major revisions may incur additional fees.'
+        answer: 'Revision scope and limits depend on the order agreement. Confirm them before work begins and keep later changes in the order conversation.'
       },
       {
         question: 'Which payment methods are supported?',
-        answer: 'We support Alipay, WeChat Pay, bank transfer, and other commonly used payment methods.'
+        answer: 'The artist and client confirm the payment method together. The platform records quotes, payment status, and delivery progress but does not promise a payment channel in advance.'
       },
       {
         question: 'Who owns the copyright?',
-        answer: 'For personal commissions, usage rights belong to the client. Commercial use must be declared in advance and may require separate copyright fees.'
+        answer: 'Copyright and usage rights follow the agreement between the artist and client. Declare commercial use, redistribution, or sublicensing before placing the order.'
       }
     ]
   }
@@ -155,6 +123,7 @@ const CONTACT_CONTENT = {
 
 export default {
   name: 'Contact',
+  components: { FilePlus2, MessageCircle },
   setup() {
     const i18n = inject('i18n')
     return { i18n }
@@ -195,59 +164,37 @@ export default {
 
 <style scoped>
 .contact-section {
-  padding: 60px 0;
+  padding: 64px 0;
 }
 
 .contact-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 30px;
-  max-width: 1000px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 40px;
+  max-width: 760px;
   margin: 0 auto;
-}
-
-@media (max-width: 768px) {
-  .contact-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 480px) {
-  .contact-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 .contact-card {
   background: var(--white);
   border-radius: var(--radius);
-  padding: 40px 30px;
+  padding: 48px 32px;
   text-align: center;
   box-shadow: var(--shadow);
-  transition: var(--transition);
+  transition: var(--transition), box-shadow 0.3s ease;
 }
 
 .contact-card:hover {
-  transform: translateY(-5px);
   box-shadow: var(--shadow-hover);
 }
 
 .contact-icon {
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   margin: 0 auto 20px;
-  font-size: 2rem;
-  color: white;
+  color: var(--text-dark);
 }
-
-.contact-card.qq .contact-icon { background: #12b7f5; }
-.contact-card.xiaohongshu .contact-icon { background: #fe2c55; }
-.contact-card.x .contact-icon { background: #000; }
-.contact-card.bilibili .contact-icon { background: #00a1d6; }
 
 .contact-card h3 {
   margin-bottom: 10px;
@@ -256,49 +203,52 @@ export default {
 
 .contact-card p {
   color: var(--text-light);
-  margin-bottom: 20px;
+  margin-bottom: 24px;
   font-size: 0.9rem;
   white-space: pre-line;
 }
 
 /* FAQ */
 .faq-section {
-  max-width: 800px;
-  margin: 60px auto 0;
+  max-width: 720px;
+  margin: 80px auto 0;
 }
 
 .faq-section h3 {
   text-align: center;
-  margin-bottom: 30px;
-  color: #333;
-}
-
-.faq-list {
-  background: white;
-  border-radius: 12px;
-  padding: 30px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  margin-bottom: 40px;
+  color: var(--text-dark);
 }
 
 .faq-item {
-  margin-bottom: 20px;
-  border-bottom: 1px solid #eee;
-  padding-bottom: 20px;
+  margin-bottom: 32px;
 }
 
 .faq-item:last-child {
   margin-bottom: 0;
-  border-bottom: none;
-  padding-bottom: 0;
 }
 
 .faq-item h4 {
-  color: #6b8e6b;
+  color: var(--text-dark);
   margin-bottom: 10px;
 }
 
 .faq-item p {
-  color: #666;
+  color: var(--text-light);
   margin: 0;
+}
+
+@media (max-width: 768px) {
+  .contact-section {
+    padding: 32px 0;
+  }
+
+  .contact-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .faq-section {
+    margin-top: 64px;
+  }
 }
 </style>

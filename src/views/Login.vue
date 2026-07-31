@@ -1,363 +1,434 @@
 <template>
-  <div class="login-page">
-    <!-- 页面标题 -->
-    <header class="page-header">
+  <main class="login-page">
+    <header class="page-header fade-in">
       <div class="container">
         <h1>{{ content.title }}</h1>
         <p>{{ content.subtitle }}</p>
       </div>
     </header>
 
-    <div class="container">
-      <div class="login-wrapper">
-        <!-- 登录卡片 -->
-        <div class="login-card">
-          <h2>{{ content.welcomeTitle }}</h2>
-          <p class="login-desc">{{ content.welcomeDesc }}</p>
-          
-          <form @submit.prevent="handleLogin" class="login-form">
-            <div class="form-group">
-              <label>{{ content.usernameLabel }}</label>
-              <input 
-                type="text" 
-                v-model="loginForm.username" 
-                required 
-                :placeholder="content.usernamePlaceholder"
-              >
-            </div>
-            <div class="form-group">
-              <label>{{ content.passwordLabel }}</label>
-              <input 
-                type="password" 
-                v-model="loginForm.password" 
-                required 
-                :placeholder="content.passwordPlaceholder"
-              >
-            </div>
-            <div v-if="loginError" class="alert alert-error">{{ loginError }}</div>
-            <button type="submit" class="btn-login" :disabled="loginLoading">
-              {{ loginLoading ? content.loginLoading : content.loginButton }}
+    <section class="login-section container">
+      <div class="login-panel fade-in">
+        <div class="login-intro">
+          <span class="intro-mark">F</span>
+          <p class="intro-kicker">{{ siteConfig.site_name }} ACCOUNT</p>
+          <h2>{{ content.introTitle }}</h2>
+          <p>{{ content.introText }}</p>
+          <ul>
+            <li v-for="item in content.benefits" :key="item">{{ item }}</li>
+          </ul>
+        </div>
+
+        <div class="login-forms">
+          <!-- 登录方式切换 Tab（v2） -->
+          <div class="login-tabs">
+            <button
+              class="tab-btn"
+              :class="{ active: loginMode === 'code' }"
+              type="button"
+              @click="switchMode('code')"
+            >
+              {{ content.codeTab }}
             </button>
+            <button
+              class="tab-btn"
+              :class="{ active: loginMode === 'password' }"
+              type="button"
+              @click="switchMode('password')"
+            >
+              {{ content.passwordTab }}
+            </button>
+          </div>
+
+          <!-- 邮箱验证码登录/注册一体（本地） -->
+          <form v-if="loginMode === 'code'" class="login-form" @submit.prevent="handleCodeLogin">
+            <div>
+              <h2>{{ content.formTitle }}</h2>
+              <p class="form-desc">{{ content.formDesc }}</p>
+            </div>
+
+            <label class="field">
+              <span>{{ content.email }}</span>
+              <input
+                v-model.trim="form.email"
+                type="email"
+                autocomplete="email"
+                :placeholder="content.emailPlaceholder"
+                required
+                @blur="validateEmail"
+              >
+              <small v-if="emailError" class="field-error">{{ emailError }}</small>
+            </label>
+
+            <label class="field">
+              <span>{{ content.code }}</span>
+              <div class="code-row">
+                <input
+                  v-model.trim="form.code"
+                  inputmode="numeric"
+                  autocomplete="one-time-code"
+                  maxlength="6"
+                  pattern="[0-9]{6}"
+                  :placeholder="content.codePlaceholder"
+                  required
+                >
+                <button
+                  class="send-code"
+                  type="button"
+                  :disabled="sendingCode || cooldown > 0 || !isEmailValid"
+                  @click="sendCode"
+                >
+                  {{ sendCodeLabel }}
+                </button>
+              </div>
+            </label>
+
+            <label class="field">
+              <span>{{ content.nickname }} <small>{{ content.optional }}</small></span>
+              <input
+                v-model.trim="form.nickname"
+                type="text"
+                maxlength="50"
+                autocomplete="nickname"
+                :placeholder="content.nicknamePlaceholder"
+              >
+            </label>
+
+            <p v-if="errorMessage" class="form-error" role="alert">{{ errorMessage }}</p>
+
+            <button class="submit-button" type="submit" :disabled="submitting">
+              {{ submitting ? content.submitting : content.submit }}
+            </button>
+            <p class="privacy-note">{{ content.privacy }}</p>
           </form>
 
-          <div class="form-footer">
-            <span>{{ content.noAccount }}</span>
-            <a href="#" @click.prevent="showRegister = true">{{ content.registerNow }}</a>
-          </div>
+          <!-- 密码登录（v2） -->
+          <form v-else class="login-form" @submit.prevent="handlePasswordLogin">
+            <div>
+              <h2>{{ content.passwordFormTitle }}</h2>
+              <p class="form-desc">{{ content.passwordFormDesc }}</p>
+            </div>
 
-          <div class="demo-accounts">
-            <p>📝 {{ content.demoUserLabel }}: user / user123</p>
-            <p>🔐 {{ content.demoAdminLabel }}: admin / furest123</p>
-          </div>
-        </div>
+            <label class="field">
+              <span>{{ content.email }}</span>
+              <input
+                v-model.trim="passwordForm.email"
+                type="email"
+                autocomplete="email"
+                :placeholder="content.emailPlaceholder"
+                required
+              >
+            </label>
 
-        <!-- 功能介绍 -->
-        <div class="features-section">
-          <h3>🎨 {{ content.featuresTitle }}</h3>
-          <div class="features-grid">
-            <div v-for="feature in content.features" :key="feature.title" :class="['feature-item', feature.admin ? 'admin-feature' : '']">
-              <div class="feature-icon">{{ feature.icon }}</div>
-              <div class="feature-content">
-                <h4>{{ feature.title }}</h4>
-                <p>{{ feature.desc }}</p>
-              </div>
+            <label class="field">
+              <span>{{ content.password }}</span>
+              <input
+                v-model="passwordForm.password"
+                type="password"
+                autocomplete="current-password"
+                :placeholder="content.passwordPlaceholder"
+                required
+              >
+            </label>
+
+            <p v-if="errorMessage" class="form-error" role="alert">{{ errorMessage }}</p>
+
+            <button class="submit-button" type="submit" :disabled="submitting">
+              {{ submitting ? content.loggingIn : content.loginSubmit }}
+            </button>
+            <p class="privacy-note">{{ content.passwordTip }}</p>
+          </form>
+
+          <!-- 第三方登录：QQ（v2） -->
+          <div class="third-party-login">
+            <div class="divider">
+              <span>{{ content.thirdParty }}</span>
+            </div>
+            <div class="social-buttons">
+              <button type="button" class="btn-qq" :disabled="qqLoading" @click="handleQQLogin">
+                <svg viewBox="0 0 24 24" width="24" height="24">
+                  <path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm3.5 14.5h-7c-.83 0-1.5-.67-1.5-1.5v-1c0-.83.67-1.5 1.5-1.5h7c.83 0 1.5.67 1.5 1.5v1c0 .83-.67 1.5-1.5 1.5zm0-4h-7c-.83 0-1.5-.67-1.5-1.5v-1c0-.83.67-1.5 1.5-1.5h7c.83 0 1.5.67 1.5 1.5v1c0 .83-.67 1.5-1.5 1.5z"/>
+                </svg>
+                <span>{{ content.qqLogin }}</span>
+              </button>
             </div>
           </div>
         </div>
       </div>
-    </div>
-
-    <!-- 注册弹窗 -->
-    <div class="modal" :class="{ active: showRegister }" @click.self="closeRegisterModal">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>{{ content.registerTitle }}</h3>
-          <button class="close-btn" @click="closeRegisterModal">×</button>
-        </div>
-        <form @submit.prevent="handleRegister" class="login-form">
-          <div class="form-group">
-            <label>{{ content.usernameLabel }}</label>
-            <input type="text" v-model="registerForm.username" required :placeholder="content.registerUsernamePlaceholder">
-          </div>
-          <div class="form-group">
-            <label>{{ content.emailLabel }}</label>
-            <input type="email" v-model="registerForm.email" :placeholder="content.emailPlaceholder">
-          </div>
-          <div class="form-group">
-            <label>{{ content.passwordLabel }}</label>
-            <input type="password" v-model="registerForm.password" required :placeholder="content.registerPasswordPlaceholder">
-          </div>
-          <div class="form-group">
-            <label>{{ content.confirmPasswordLabel }}</label>
-            <input type="password" v-model="registerForm.confirmPassword" required :placeholder="content.confirmPasswordPlaceholder">
-          </div>
-          <div v-if="registerError" class="alert alert-error">{{ registerError }}</div>
-          <button type="submit" class="btn-login" :disabled="registerLoading">
-            {{ registerLoading ? content.registerLoading : content.registerButton }}
-          </button>
-        </form>
-      </div>
-    </div>
-  </div>
+    </section>
+  </main>
 </template>
 
 <script>
 import { inject } from 'vue'
-import { eventBus } from '../utils/eventBus'
-import { getCurrentUser, getPostLoginRoute, loginLocal, registerLocalUser } from '../utils/auth'
+import { siteConfig } from '../state/siteConfig'
+import { API_ENDPOINTS } from '../config/api'
+import { apiRequest, showToast } from '../utils/eventBus'
+import { getCurrentUser, getPostLoginRoute, isAuthenticated, saveSession } from '../utils/auth'
 
-const LOGIN_CONTENT = {
+const CONTENT = {
   zh: {
-    title: '登录',
-    subtitle: '登录 FUREST 解锁更多功能',
-    welcomeTitle: '欢迎回来',
-    welcomeDesc: '请输入您的账号密码登录',
-    usernameLabel: '用户名',
-    usernamePlaceholder: '请输入用户名',
-    registerUsernamePlaceholder: '设置用户名',
-    passwordLabel: '密码',
+    title: '登录或注册',
+    subtitle: '使用邮箱验证码或密码安全进入平台账户',
+    introTitle: '从需求到交付，进度始终清晰',
+    introText: '同一个账号即可提交委托、查询订单并与画师沟通。首次验证邮箱时会自动创建账号。',
+    benefits: ['查看自己的全部委托', '在订单内发送消息和附件', '持续跟踪报价、绘制和交付状态'],
+    codeTab: '验证码登录',
+    passwordTab: '密码登录',
+    formTitle: '邮箱验证',
+    formDesc: '无需设置密码，验证码 5 分钟内有效。未注册邮箱将自动创建账户。',
+    passwordFormTitle: '密码登录',
+    passwordFormDesc: '使用邮箱与密码登录已有账户。',
+    email: '邮箱',
+    emailPlaceholder: 'name@example.com',
+    code: '验证码',
+    codePlaceholder: '6 位数字',
+    nickname: '昵称',
+    optional: '首次注册时可选',
+    nicknamePlaceholder: '未填写时将使用邮箱前缀',
+    password: '密码',
     passwordPlaceholder: '请输入密码',
-    registerPasswordPlaceholder: '至少6位密码',
-    confirmPasswordLabel: '确认密码',
-    confirmPasswordPlaceholder: '再次输入密码',
-    emailLabel: '邮箱（可选）',
-    emailPlaceholder: '用于找回密码',
-    loginButton: '登录',
-    loginLoading: '登录中...',
-    registerButton: '注册',
-    registerLoading: '注册中...',
-    noAccount: '还没有账号？',
-    registerNow: '立即注册',
-    registerTitle: '用户注册',
-    demoUserLabel: '测试用户',
-    demoAdminLabel: '管理员',
-    featuresTitle: '登录后可解锁',
-    features: [
-      { icon: '📅', title: '个人排期管理', desc: '使用 TODO 功能管理您的约稿排期' },
-      { icon: '💾', title: '数据云端同步', desc: '您的排单数据永久保存，换设备不丢失' },
-      { icon: '🔔', title: '截止提醒', desc: '稿件截止日期前自动提醒，不再错过交稿' },
-      { icon: '📊', title: '工作量统计', desc: '查看月度工作量统计，合理安排时间' },
-      { icon: '🔧', title: '管理后台', desc: '管理员账号自动进入后台管理系统', admin: true }
-    ],
-    messages: {
-      adminLoginSuccess: '管理员登录成功！',
-      loginSuccess: '登录成功！',
-      registerSuccess: '注册成功！请登录',
-      invalidCredentials: '用户名或密码错误',
-      loginFailed: '登录失败，请稍后重试',
-      networkError: '网络错误，请稍后重试',
-      passwordMismatch: '两次密码输入不一致',
-      passwordTooShort: '密码长度至少6位',
-      registerFailed: '注册失败',
-      accountExists: '该账号信息已存在'
-    }
+    passwordTip: '首次使用请先用验证码登录并设置密码。',
+    sendCode: '发送验证码',
+    sendingCode: '发送中...',
+    resend: '{seconds} 秒后重发',
+    submit: '继续',
+    submitting: '验证中...',
+    loginSubmit: '登录',
+    loggingIn: '登录中...',
+    privacy: '继续即表示你同意仅将邮箱用于账号验证和订单通知。',
+    thirdParty: '其他登录方式',
+    qqLogin: 'QQ 登录',
+    sent: '验证码已发送，请查收邮箱',
+    debugSent: '开发模式验证码已自动填入',
+    success: '登录成功',
+    registerSuccess: '注册并登录成功',
+    invalidEmail: '请先输入有效邮箱',
+    invalidCode: '请输入 6 位数字验证码',
+    passwordRequired: '请输入密码',
+    qqLoginFailed: 'QQ 登录初始化失败，请稍后重试'
   },
   en: {
-    title: 'Login',
-    subtitle: 'Sign in to FUREST to unlock more features',
-    welcomeTitle: 'Welcome Back',
-    welcomeDesc: 'Enter your account details to sign in',
-    usernameLabel: 'Username',
-    usernamePlaceholder: 'Enter your username',
-    registerUsernamePlaceholder: 'Choose a username',
-    passwordLabel: 'Password',
+    title: 'Sign In or Register',
+    subtitle: 'Use an email verification code or password to access your account securely',
+    introTitle: 'Keep every commission clear from brief to delivery',
+    introText: 'One account lets you submit commissions, track orders, and talk with your artist. Your account is created on first verification.',
+    benefits: ['Review all of your commissions', 'Send messages and attachments per order', 'Track quotes, production, and delivery'],
+    codeTab: 'Code Login',
+    passwordTab: 'Password Login',
+    formTitle: 'Verify your email',
+    formDesc: 'No password is needed. The code remains valid for 5 minutes. New accounts are created automatically.',
+    passwordFormTitle: 'Password Login',
+    passwordFormDesc: 'Sign in to an existing account with email and password.',
+    email: 'Email',
+    emailPlaceholder: 'name@example.com',
+    code: 'Verification code',
+    codePlaceholder: '6 digits',
+    nickname: 'Nickname',
+    optional: 'optional for first registration',
+    nicknamePlaceholder: 'Defaults to your email prefix',
+    password: 'Password',
     passwordPlaceholder: 'Enter your password',
-    registerPasswordPlaceholder: 'At least 6 characters',
-    confirmPasswordLabel: 'Confirm Password',
-    confirmPasswordPlaceholder: 'Enter your password again',
-    emailLabel: 'Email (Optional)',
-    emailPlaceholder: 'Used for password recovery',
-    loginButton: 'Login',
-    loginLoading: 'Signing in...',
-    registerButton: 'Register',
-    registerLoading: 'Creating account...',
-    noAccount: 'No account yet?',
-    registerNow: 'Create one now',
-    registerTitle: 'User Registration',
-    demoUserLabel: 'Demo User',
-    demoAdminLabel: 'Admin',
-    featuresTitle: 'Unlocked After Login',
-    features: [
-      { icon: '📅', title: 'Personal Schedule Management', desc: 'Use the TODO planner to manage your commission schedule' },
-      { icon: '💾', title: 'Cloud Sync', desc: 'Your schedule data stays saved across devices' },
-      { icon: '🔔', title: 'Deadline Reminders', desc: 'Get reminders before delivery deadlines so nothing is missed' },
-      { icon: '📊', title: 'Workload Statistics', desc: 'Review your monthly workload and plan your time better' },
-      { icon: '🔧', title: 'Admin Dashboard', desc: 'Admin accounts are sent directly to the management backend', admin: true }
-    ],
-    messages: {
-      adminLoginSuccess: 'Admin login successful.',
-      loginSuccess: 'Logged in successfully.',
-      registerSuccess: 'Registration successful. Please sign in.',
-      invalidCredentials: 'Incorrect username or password.',
-      loginFailed: 'Login failed. Please try again later.',
-      networkError: 'Network error. Please try again later.',
-      passwordMismatch: 'The passwords do not match.',
-      passwordTooShort: 'Password must be at least 6 characters.',
-      registerFailed: 'Registration failed.',
-      accountExists: 'This account information is already in use.'
-    }
+    passwordTip: 'First time? Sign in with a code and set your password.',
+    sendCode: 'Send code',
+    sendingCode: 'Sending...',
+    resend: 'Resend in {seconds}s',
+    submit: 'Continue',
+    submitting: 'Verifying...',
+    loginSubmit: 'Sign In',
+    loggingIn: 'Signing in...',
+    privacy: 'By continuing, you agree that your email may be used for account verification and order notices.',
+    thirdParty: 'Other sign-in options',
+    qqLogin: 'Sign in with QQ',
+    sent: 'Verification code sent. Check your inbox.',
+    debugSent: 'Development code filled in automatically.',
+    success: 'Signed in successfully.',
+    registerSuccess: 'Account created and signed in successfully.',
+    invalidEmail: 'Enter a valid email first.',
+    invalidCode: 'Enter the 6-digit verification code.',
+    passwordRequired: 'Enter your password.',
+    qqLoginFailed: 'Failed to start QQ sign-in. Please try again later.'
   }
 }
+
+// 邮箱格式校验正则（v2 抽取为常量复用）
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export default {
   name: 'Login',
   setup() {
-    const i18n = inject('i18n')
-    return { i18n }
+    return { i18n: inject('i18n'), siteConfig }
   },
   data() {
     return {
-      loginForm: {
-        username: '',
-        password: ''
-      },
-      loginError: '',
-      loginLoading: false,
-      
-      showRegister: false,
-      registerForm: {
-        username: '',
-        email: '',
-        password: '',
-        confirmPassword: ''
-      },
-      registerError: '',
-      registerLoading: false
+      // 登录模式: 'code' | 'password'
+      loginMode: 'code',
+      form: { email: '', code: '', nickname: '' },
+      passwordForm: { email: '', password: '' },
+      sendingCode: false,
+      submitting: false,
+      qqLoading: false,
+      cooldown: 0,
+      cooldownTimer: null,
+      errorMessage: '',
+      emailError: ''
     }
   },
   computed: {
-    locale() {
-      return this.i18n.getLocale()
-    },
     content() {
-      return LOGIN_CONTENT[this.locale]
+      return CONTENT[this.i18n.getLocale()]
+    },
+    isEmailValid() {
+      return EMAIL_REGEX.test(this.form.email)
+    },
+    sendCodeLabel() {
+      if (this.sendingCode) return this.content.sendingCode
+      if (this.cooldown > 0) return this.content.resend.replace('{seconds}', this.cooldown)
+      return this.content.sendCode
     }
   },
-  
   mounted() {
-    this.checkLoginStatus()
+    if (isAuthenticated()) this.redirectAfterLogin(getCurrentUser())
   },
-  
+  beforeUnmount() {
+    window.clearInterval(this.cooldownTimer)
+  },
   methods: {
-    closeRegisterModal() {
-      this.showRegister = false
-      this.registerError = ''
+    // 切换登录方式时清空错误提示
+    switchMode(mode) {
+      this.loginMode = mode
+      this.errorMessage = ''
+      this.emailError = ''
+    },
+    // 邮箱失焦校验（v2 的更严格校验）
+    validateEmail() {
+      if (this.form.email && !this.isEmailValid) {
+        this.emailError = this.content.invalidEmail
+      } else {
+        this.emailError = ''
+      }
     },
     getRedirectTarget() {
-      return typeof this.$route.query.redirect === 'string' ? this.$route.query.redirect : '/todo'
+      const redirect = this.$route.query.redirect
+      return typeof redirect === 'string' && redirect.startsWith('/') ? redirect : '/orders'
     },
-    parseErrorMessage(error) {
-      return String(error || '').toLowerCase()
+    redirectAfterLogin(user) {
+      return this.$router.replace(getPostLoginRoute(user, this.getRedirectTarget()))
     },
-    resolveLoginError(status, error) {
-      const message = this.parseErrorMessage(error)
-      if (
-        status === 401 ||
-        status === 403 ||
-        message.includes('invalid') ||
-        message.includes('username') ||
-        message.includes('password') ||
-        message.includes('credential') ||
-        message.includes('用户') ||
-        message.includes('密码') ||
-        message.includes('账号')
-      ) {
-        return this.content.messages.invalidCredentials
-      }
-      return this.content.messages.loginFailed
+    // 登录成功统一收尾：saveSession 内部已写入本地会话并触发 AUTH_CHANGED_EVENT，
+    // Navbar 等组件监听该事件自动刷新登录态
+    finalizeLogin(data) {
+      const user = saveSession(data)
+      showToast(data?.is_new_user ? this.content.registerSuccess : this.content.success, 'success')
+      return this.redirectAfterLogin(user)
     },
-    resolveRegisterError(status, error) {
-      const message = this.parseErrorMessage(error)
-      if (
-        status === 409 ||
-        message.includes('exist') ||
-        message.includes('already') ||
-        message.includes('duplicate') ||
-        message.includes('taken') ||
-        message.includes('已存在') ||
-        message.includes('重复')
-      ) {
-        return this.content.messages.accountExists
-      }
-      return this.content.messages.registerFailed
+    startCooldown(seconds = 60) {
+      window.clearInterval(this.cooldownTimer)
+      this.cooldown = seconds
+      this.cooldownTimer = window.setInterval(() => {
+        this.cooldown -= 1
+        if (this.cooldown <= 0) window.clearInterval(this.cooldownTimer)
+      }, 1000)
     },
-    // 检查登录状态
-    checkLoginStatus() {
-      const currentUser = getCurrentUser()
-      if (!currentUser) return
-
-      eventBus.emit('login-success', { role: currentUser.role, username: currentUser.username })
-      this.$router.replace(getPostLoginRoute(currentUser, this.getRedirectTarget()))
-    },
-    
-    // 统一登录处理
-    async handleLogin() {
-      this.loginError = ''
-      this.loginLoading = true
-      
-      try {
-        const result = loginLocal(this.loginForm)
-
-        if (!result.ok) {
-          this.loginError = this.content.messages.invalidCredentials
-          return
-        }
-
-        const successMessage = result.user.role === 'admin'
-          ? this.content.messages.adminLoginSuccess
-          : this.content.messages.loginSuccess
-
-        eventBus.emit('show-toast', { message: successMessage, type: 'success' })
-        eventBus.emit('login-success', { role: result.user.role, username: result.user.username })
-        await this.$router.push(getPostLoginRoute(result.user, this.getRedirectTarget()))
-      } catch (e) {
-        console.error('登录失败:', e)
-        this.loginError = this.content.messages.loginFailed
-      } finally {
-        this.loginLoading = false
-      }
-    },
-    
-    // 用户注册
-    async handleRegister() {
-      this.registerError = ''
-      
-      if (this.registerForm.password !== this.registerForm.confirmPassword) {
-        this.registerError = this.content.messages.passwordMismatch
+    async sendCode() {
+      this.errorMessage = ''
+      if (!this.isEmailValid) {
+        this.errorMessage = this.content.invalidEmail
         return
       }
-      
-      if (this.registerForm.password.length < 6) {
-        this.registerError = this.content.messages.passwordTooShort
-        return
-      }
-      
-      this.registerLoading = true
-      
+
+      this.sendingCode = true
       try {
-        const result = registerLocalUser({
-          username: this.registerForm.username,
-          password: this.registerForm.password,
-          email: this.registerForm.email
+        const data = await apiRequest(API_ENDPOINTS.AUTH_SEND_CODE, {
+          method: 'POST',
+          auth: false,
+          body: { email: this.form.email }
         })
-
-        if (result.ok) {
-          eventBus.emit('show-toast', { message: this.content.messages.registerSuccess, type: 'success' })
-          this.registerForm = { username: '', email: '', password: '', confirmPassword: '' }
-          this.closeRegisterModal()
-          // 自动填充登录表单
-          this.loginForm.username = result.user.username
-          this.loginForm.password = ''
+        if (data?.debug_code) {
+          this.form.code = data.debug_code
+          showToast(this.content.debugSent, 'success')
         } else {
-          this.registerError = result.error === 'ACCOUNT_EXISTS'
-            ? this.content.messages.accountExists
-            : this.content.messages.registerFailed
+          showToast(data?.message || this.content.sent, 'success')
         }
-      } catch (e) {
-        console.error('注册失败:', e)
-        this.registerError = this.content.messages.registerFailed
+        this.startCooldown(data?.retry_after || 60)
+      } catch (error) {
+        this.errorMessage = error.message
       } finally {
-        this.registerLoading = false
+        this.sendingCode = false
+      }
+    },
+    async handleCodeLogin() {
+      this.errorMessage = ''
+      if (!this.isEmailValid) {
+        this.errorMessage = this.content.invalidEmail
+        return
+      }
+      if (!/^\d{6}$/.test(this.form.code)) {
+        this.errorMessage = this.content.invalidCode
+        return
+      }
+
+      this.submitting = true
+      try {
+        const data = await apiRequest(API_ENDPOINTS.AUTH_LOGIN_REGISTER, {
+          method: 'POST',
+          auth: false,
+          body: {
+            email: this.form.email,
+            code: this.form.code,
+            nickname: this.form.nickname
+          }
+        })
+        await this.finalizeLogin(data)
+      } catch (error) {
+        this.errorMessage = error.message
+      } finally {
+        this.submitting = false
+      }
+    },
+    // 密码登录（v2），走本地 apiRequest 架构
+    async handlePasswordLogin() {
+      this.errorMessage = ''
+      if (!EMAIL_REGEX.test(this.passwordForm.email)) {
+        this.errorMessage = this.content.invalidEmail
+        return
+      }
+      if (!this.passwordForm.password) {
+        this.errorMessage = this.content.passwordRequired
+        return
+      }
+
+      this.submitting = true
+      try {
+        const data = await apiRequest(API_ENDPOINTS.AUTH_PASSWORD_LOGIN, {
+          method: 'POST',
+          auth: false,
+          body: {
+            email: this.passwordForm.email,
+            password: this.passwordForm.password
+          }
+        })
+        await this.finalizeLogin(data)
+      } catch (error) {
+        this.errorMessage = error.message
+      } finally {
+        this.submitting = false
+      }
+    },
+    // QQ 第三方登录（v2）：获取授权链接后跳转
+    async handleQQLogin() {
+      this.qqLoading = true
+      try {
+        const data = await apiRequest('/api/auth/qq/auth-url', { auth: false })
+        if (data?.auth_url) {
+          window.location.href = data.auth_url
+        } else {
+          throw new Error(this.content.qqLoginFailed)
+        }
+      } catch (error) {
+        showToast(error.message || this.content.qqLoginFailed, 'error')
+      } finally {
+        this.qqLoading = false
       }
     }
   }
@@ -365,263 +436,50 @@ export default {
 </script>
 
 <style scoped>
-/* 页面标题 */
-.page-header {
-  background: linear-gradient(135deg, var(--primary-color) 0%, var(--accent-color) 100%);
-  color: var(--white);
-  padding: 60px 0;
-  text-align: center;
-}
-
-.page-header h1 {
-  font-size: 2.5rem;
-  margin-bottom: 10px;
-}
-
-.page-header p {
-  font-size: 1.1rem;
-  opacity: 0.9;
-}
-
-/* 登录容器 */
-.login-wrapper {
-  display: grid;
-  grid-template-columns: 400px 1fr;
-  gap: 50px;
-  max-width: 1100px;
-  margin: 50px auto;
-  padding: 0 20px;
-  align-items: start;
-}
-
-@media (max-width: 900px) {
-  .login-wrapper {
-    grid-template-columns: 1fr;
-    gap: 40px;
-  }
-}
-
-/* 登录卡片 */
-.login-card {
-  background: var(--white);
-  border-radius: var(--radius);
-  padding: 40px 35px;
-  box-shadow: var(--shadow);
-}
-
-.login-card h2 {
-  font-size: 1.6rem;
-  color: var(--text-dark);
-  margin-bottom: 5px;
-}
-
-.login-desc {
-  color: var(--text-light);
-  margin-bottom: 30px;
-}
-
-/* 表单 */
-.login-form .form-group {
-  margin-bottom: 20px;
-}
-
-.login-form label {
-  display: block;
-  margin-bottom: 8px;
-  font-weight: 500;
-  color: var(--text-dark);
-}
-
-.login-form input {
-  width: 100%;
-  padding: 12px 15px;
-  border: 1px solid #ddd;
-  border-radius: var(--radius-sm);
-  font-size: 1rem;
-  transition: var(--transition);
-}
-
-.login-form input:focus {
-  outline: none;
-  border-color: var(--primary-color);
-}
-
-.btn-login {
-  width: 100%;
-  padding: 14px;
-  background: var(--primary-color);
-  color: var(--white);
-  border: none;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  font-size: 1rem;
-  font-weight: 500;
-  transition: var(--transition);
-  margin-top: 10px;
-}
-
-.btn-login:hover:not(:disabled) {
-  background: var(--accent-color);
-}
-
-.btn-login:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-/* 提示 */
-.alert {
-  padding: 12px 15px;
-  border-radius: var(--radius-sm);
-  margin-bottom: 15px;
-  font-size: 0.9rem;
-}
-
-.alert-error {
-  background: #ffebee;
-  color: #c62828;
-  border: 1px solid #ffcdd2;
-}
-
-/* 表单底部 */
-.form-footer {
-  text-align: center;
-  margin-top: 25px;
-  padding-top: 20px;
-  border-top: 1px solid var(--bg-light);
-  color: var(--text-light);
-}
-
-.form-footer a {
-  color: var(--primary-color);
-  font-weight: 500;
-  text-decoration: none;
-  margin-left: 5px;
-}
-
-.form-footer a:hover {
-  text-decoration: underline;
-}
-
-/* 测试账号 */
-.demo-accounts {
-  margin-top: 25px;
-  padding: 15px;
-  background: var(--bg-light);
-  border-radius: var(--radius-sm);
-}
-
-.demo-accounts p {
-  font-size: 0.85rem;
-  color: var(--text-light);
-  margin: 5px 0;
-}
-
-/* 功能介绍 */
-.features-section h3 {
-  font-size: 1.3rem;
-  color: var(--text-dark);
-  margin-bottom: 25px;
-}
-
-.features-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-}
-
-.feature-item {
-  display: flex;
-  gap: 15px;
-  padding: 20px;
-  background: var(--white);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  transition: var(--transition);
-}
-
-.feature-item:hover {
-  transform: translateX(5px);
-  box-shadow: var(--shadow-hover);
-}
-
-.feature-icon {
-  font-size: 1.8rem;
-  width: 50px;
-  height: 50px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-light);
-  border-radius: var(--radius-sm);
-  flex-shrink: 0;
-}
-
-.feature-content h4 {
-  font-size: 1rem;
-  color: var(--text-dark);
-  margin-bottom: 5px;
-}
-
-.feature-content p {
-  font-size: 0.9rem;
-  color: var(--text-light);
-}
-
-.admin-feature {
-  border-left: 4px solid var(--accent-color);
-}
-
-.admin-feature .feature-icon {
-  background: rgba(212, 165, 116, 0.1);
-}
-
-/* 弹窗 */
-.modal {
-  display: none;
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0,0,0,0.5);
-  z-index: 2000;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-}
-
-.modal.active {
-  display: flex;
-}
-
-.modal-content {
-  background: var(--white);
-  border-radius: var(--radius);
-  padding: 30px;
-  width: 100%;
-  max-width: 450px;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 25px;
-}
-
-.modal-header h3 {
-  font-size: 1.3rem;
-  color: var(--text-dark);
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  cursor: pointer;
-  color: var(--text-muted);
+.login-section { padding: 64px 20px; }
+.login-panel { max-width: 940px; margin: 0 auto; display: grid; grid-template-columns: 0.9fr 1.1fr; background: var(--white); box-shadow: var(--shadow-hover); border-radius: 8px; overflow: hidden; }
+.login-intro { padding: 48px; background: #F5F5F5; color: var(--text-dark); }
+.intro-mark { display: grid; place-items: center; width: 52px; height: 52px; border: 2px solid var(--primary-color); color: var(--primary-color); font-size: 1.7rem; font-weight: 800; margin-bottom: 26px; }
+.intro-kicker { color: var(--primary-color); font-size: 0.78rem; font-weight: 700; letter-spacing: 0; }
+.login-intro h2 { font-size: 2rem; margin: 14px 0; line-height: 1.3; }
+.login-intro > p:not(.intro-kicker) { color: var(--text-light); line-height: 1.8; }
+.login-intro ul { margin: 28px 0 0; padding: 0; list-style: none; display: grid; gap: 13px; }
+.login-intro li::before { content: '✓'; color: var(--primary-color); margin-right: 10px; }
+.login-forms { padding: 48px; }
+.login-tabs { display: flex; gap: 10px; margin-bottom: 28px; border-bottom: 2px solid #F0F0F0; }
+.tab-btn { flex: 1; padding: 12px 20px; background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -2px; cursor: pointer; font-size: 1rem; font-weight: 600; color: var(--text-light); transition: var(--transition); }
+.tab-btn:hover { color: var(--primary-color); }
+.tab-btn.active { color: var(--primary-color); border-bottom-color: var(--primary-color); }
+.login-form { display: grid; gap: 22px; }
+.login-form h2 { font-size: 1.7rem; margin: 0 0 6px; }
+.form-desc, .privacy-note { color: var(--text-muted); line-height: 1.6; }
+.field { display: grid; gap: 8px; font-weight: 600; color: var(--text-dark); }
+.field small { color: var(--text-muted); font-weight: 400; }
+.field input { width: 100%; height: 48px; padding: 0 14px; border: 1px solid #E5E5E5; border-radius: 8px; font: inherit; transition: var(--transition); }
+.field input:focus { outline: 2px solid rgba(59, 130, 246, 0.2); border-color: var(--primary-color); }
+.field-error { color: #B91C1C; font-weight: 400; }
+.code-row { display: grid; grid-template-columns: 1fr 132px; gap: 10px; }
+.send-code, .submit-button { border: 0; border-radius: 8px; font-weight: 700; cursor: pointer; transition: var(--transition); }
+.send-code { background: #EFF6FF; color: var(--primary-color); padding: 0 12px; }
+.send-code:disabled, .submit-button:disabled { opacity: 0.55; cursor: not-allowed; }
+.submit-button { height: 50px; background: var(--primary-color); color: #fff; font-size: 1rem; }
+.submit-button:hover:not(:disabled) { background: #2563EB; }
+.form-error { padding: 12px 14px; background: #FEF2F2; border-left: 3px solid #B91C1C; color: #B91C1C; line-height: 1.5; }
+.privacy-note { margin: -8px 0 0; font-size: 0.82rem; text-align: center; }
+.third-party-login { margin-top: 28px; padding-top: 24px; border-top: 1px solid #F0F0F0; }
+.divider { display: flex; align-items: center; margin-bottom: 18px; color: var(--text-muted); font-size: 0.85rem; }
+.divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: #F0F0F0; }
+.divider span { padding: 0 14px; }
+.social-buttons { display: flex; justify-content: center; }
+.btn-qq { display: flex; align-items: center; gap: 8px; padding: 10px 24px; background: #12B7F5; color: #fff; border: 0; border-radius: 8px; cursor: pointer; font-size: 0.95rem; font-weight: 600; transition: var(--transition); }
+.btn-qq:hover:not(:disabled) { background: #0EA5E0; }
+.btn-qq:disabled { opacity: 0.55; cursor: not-allowed; }
+.btn-qq svg { width: 20px; height: 20px; }
+@media (max-width: 760px) {
+  .login-section { padding: 64px 16px; }
+  .login-panel { grid-template-columns: 1fr; }
+  .login-intro, .login-forms { padding: 30px 24px; }
+  .login-intro h2 { font-size: 1.55rem; }
+  .code-row { grid-template-columns: minmax(0, 1fr) 116px; }
 }
 </style>

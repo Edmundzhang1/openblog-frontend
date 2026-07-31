@@ -38,3 +38,7 @@ Thumbs.db
 
 # Testing
 coverage/
+test-results/
+playwright-report/
+*.tsbuildinfo
+.vite/

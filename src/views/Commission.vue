@@ -1,5 +1,5 @@
 <template>
-  <div class="commission">
+  <main class="commission-page fade-in">
     <header class="page-header">
       <div class="container">
         <h1>{{ $t('commission.title') }}</h1>
@@ -8,307 +8,332 @@
     </header>
 
     <section class="commission-section">
-      <div class="container">
-        <div class="commission-steps">
-          <!-- 步骤1：选择风格 -->
-          <div class="step">
-            <div class="step-header">
-              <div class="step-number">1</div>
+      <div class="container commission-shell">
+        <div v-if="currentUser?.role !== 'CLIENT'" class="notice notice-error">
+          {{ copy.clientOnly }}
+        </div>
+
+        <template v-else>
+          <section class="step-panel">
+            <div class="step-heading">
+              <span class="step-number">1</span>
+              <div>
+                <h2>{{ copy.chooseArtist }}</h2>
+                <p>{{ copy.chooseArtistHint }}</p>
+              </div>
+            </div>
+
+            <div v-if="loadingArtists" class="inline-state">{{ copy.loadingArtists }}</div>
+            <div v-else-if="artists.length" class="artist-grid">
+              <button
+                v-for="artist in artists"
+                :key="artist.uid"
+                type="button"
+                class="artist-option"
+                :class="{ selected: selectedArtistId === artist.uid }"
+                @click="selectedArtistId = artist.uid"
+              >
+                <span class="avatar" :style="avatarStyle(artist)">{{ artistInitial(artist) }}</span>
+                <span class="artist-details">
+                  <strong>{{ artist.nickname }}</strong>
+                  <small>{{ artist.bio || copy.artistFallbackBio }}</small>
+                  <span v-if="artist.tags?.length" class="tag-row">
+                    <span v-for="tag in artist.tags" :key="tag">{{ tag }}</span>
+                  </span>
+                </span>
+                <span class="artist-price">{{ formatPriceRange(artist) }}</span>
+              </button>
+            </div>
+            <div v-else class="inline-state error-state">
+              <p>{{ artistError || copy.noArtists }}</p>
+              <button type="button" class="text-button" @click="loadArtists">{{ copy.retry }}</button>
+            </div>
+
+            <div class="type-heading">
               <h3>{{ $t('commission.step1') }}</h3>
             </div>
             <div class="style-options">
-              <div 
-                v-for="style in localizedStyles" 
+              <button
+                v-for="style in localizedStyles"
                 :key="style.key"
+                type="button"
                 class="style-option"
                 :class="{ selected: selectedStyle === style.key }"
                 @click="selectedStyle = style.key"
               >
                 <img :src="style.image" :alt="style.name">
-                <h4>{{ style.name }}</h4>
-                <p>{{ style.desc }}</p>
-                <p class="price"><strong>{{ style.price }}</strong></p>
+                <span class="style-copy">
+                  <strong>{{ style.name }}</strong>
+                  <small>{{ style.desc }}</small>
+                </span>
+                <span class="style-price">{{ style.price }}</span>
+              </button>
+            </div>
+          </section>
+
+          <section class="step-panel">
+            <div class="step-heading">
+              <span class="step-number">2</span>
+              <div>
+                <h2>{{ $t('commission.step2') }}</h2>
+                <p>{{ copy.formHint }}</p>
               </div>
             </div>
-          </div>
 
-          <!-- 步骤2：填写委托信息 -->
-          <div class="step">
-            <div class="step-header">
-              <div class="step-number">2</div>
-              <h3>{{ $t('commission.step2') }}</h3>
-            </div>
-
-            <!-- 委托模式选择 -->
-            <div class="mode-selection">
-              <label class="mode-option">
-                <input type="radio" v-model="isGuestMode" :value="true">
-                <span class="mode-label">{{ $t('commission.guestMode') }}</span>
-              </label>
-              <label class="mode-option">
-                <input type="radio" v-model="isGuestMode" :value="false">
-                <span class="mode-label">{{ $t('commission.loginMode') }}</span>
-              </label>
-            </div>
-
-            <!-- 登录提示 -->
-            <div v-if="!isGuestMode && !isLoggedIn" class="login-prompt">
-              <p>{{ $t('commission.loginRequired') }}</p>
-              <router-link to="/login" class="btn btn-primary">{{ $t('commission.goLogin') }}</router-link>
-            </div>
-
-            <form v-else @submit.prevent="submitForm">
+            <form @submit.prevent="submitForm">
               <div class="form-row">
                 <div class="form-group">
-                  <label>{{ $t('commission.nickname') }} <span class="required">*</span></label>
-                  <input v-model="form.client_name" type="text" required :placeholder="$t('commission.nickname')">
+                  <label for="commission-title">{{ copy.title }} <span class="required">*</span></label>
+                  <input
+                    id="commission-title"
+                    v-model.trim="form.title"
+                    type="text"
+                    minlength="2"
+                    maxlength="200"
+                    required
+                    :placeholder="copy.titlePlaceholder"
+                  >
                 </div>
                 <div class="form-group">
-                  <label>{{ $t('commission.contact') }} <span class="required">*</span></label>
-                  <div class="contact-input-group">
-                    <select v-model="form.contact_type" class="contact-type">
-                      <option value="qq">QQ</option>
-                      <option value="email">{{ $t('commission.contactEmail') }}</option>
-                    </select>
-                    <input 
-                      v-model="form.contact_value" 
-                      type="text" 
-                      required 
-                      :placeholder="$t('commission.contactHint')"
-                    >
-                  </div>
+                  <label for="commission-usage">{{ $t('commission.usage') }} <span class="required">*</span></label>
+                  <select id="commission-usage" v-model="form.usage" required>
+                    <option v-for="option in usageOptions" :key="option.value || 'empty'" :value="option.value">
+                      {{ option.label }}
+                    </option>
+                  </select>
                 </div>
               </div>
 
               <div class="form-group">
-                <label>{{ $t('commission.usage') }} <span class="required">*</span></label>
-                <select v-model="form.usage" required>
-                  <option v-for="option in usageOptions" :key="option.value || 'usage-placeholder'" :value="option.value">
-                    {{ option.label }}
-                  </option>
-                </select>
-              </div>
-
-              <div class="form-group">
-                <label>{{ $t('commission.description') }} <span class="required">*</span></label>
-                <textarea 
-                  v-model="form.description" 
-                  required 
-                  rows="6"
+                <label for="commission-description">{{ $t('commission.description') }} <span class="required">*</span></label>
+                <textarea
+                  id="commission-description"
+                  v-model.trim="form.description"
+                  rows="7"
+                  minlength="10"
+                  maxlength="4200"
+                  required
                   :placeholder="$t('commission.descriptionPlaceholder')"
                 ></textarea>
+                <span class="field-counter">{{ form.description.length }}/4200</span>
               </div>
 
               <div class="form-group">
-                <label>{{ $t('commission.details') }}</label>
-                <textarea 
-                  v-model="form.details" 
+                <label for="commission-details">{{ $t('commission.details') }}</label>
+                <textarea
+                  id="commission-details"
+                  v-model.trim="form.details"
                   rows="4"
+                  maxlength="500"
                   :placeholder="$t('commission.detailsPlaceholder')"
                 ></textarea>
               </div>
 
-              <div class="form-group">
-                <label>{{ $t('commission.schedule') }}</label>
-                <div class="commission-calendar">
-                  <div class="commission-calendar__header">
-                    <h3 class="commission-calendar__title">{{ calendarTitle }}</h3>
-                    <div class="commission-calendar__nav">
-                      <button type="button" class="commission-calendar__nav-btn" @click="changeMonth(-1)">‹</button>
-                      <button type="button" class="commission-calendar__nav-btn" @click="changeMonth(1)">›</button>
-                    </div>
-                  </div>
-                  <div class="commission-calendar__grid">
-                    <div class="commission-calendar__weekday" v-for="day in weekdays" :key="day">{{ day }}</div>
-                    <div 
-                      v-for="(day, index) in calendarData.days" 
-                      :key="index"
-                      class="commission-calendar__day"
-                      :class="{ 
-                        'is-other-month': day.isOtherMonth, 
-                        'is-selected': form.schedule_date === day.date,
-                        'is-occupied': day.isOccupied
-                      }"
-                      @click="!day.isOtherMonth && !day.isOccupied && (form.schedule_date = day.date)"
-                    >
-                      {{ day.day }}
-                      <span v-if="day.isOccupied" class="commission-calendar__marker">{{ $t('commission.occupiedLabel') }}</span>
-                    </div>
-                  </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="commission-date">{{ $t('commission.schedule') }}</label>
+                  <input id="commission-date" v-model="form.scheduleDate" type="date" :min="today">
                 </div>
-                <p class="date-hint">
-                  {{ $t('commission.selectedDate') }}<strong>{{ form.schedule_date || $t('commission.notSelected') }}</strong>
-                </p>
-              </div>
-
-              <div class="form-group">
-                <label>{{ $t('commission.budget') }}</label>
-                <select v-model="form.budget">
-                  <option v-for="option in budgetOptions" :key="option.value || 'budget-placeholder'" :value="option.value">
-                    {{ option.label }}
-                  </option>
-                </select>
+                <div class="form-group">
+                  <label for="commission-budget">{{ $t('commission.budget') }}</label>
+                  <select id="commission-budget" v-model="form.budget">
+                    <option v-for="option in budgetOptions" :key="option.value || 'empty'" :value="option.value">
+                      {{ option.label }}
+                    </option>
+                  </select>
+                </div>
               </div>
 
               <div class="form-group">
                 <label>{{ $t('commission.uploadRef') }}</label>
-                <div 
-                  class="file-upload" 
-                  :class="{ 'has-file': form.files.length > 0, 'drag-over': dragOver }"
+                <div
+                  class="file-upload"
+                  :class="{ 'has-file': form.files.length, 'drag-over': dragOver }"
                   @click="$refs.fileInput.click()"
                   @drop.prevent="handleDrop"
                   @dragover.prevent="dragOver = true"
                   @dragleave.prevent="dragOver = false"
                 >
-                  <input 
+                  <input
                     ref="fileInput"
-                    type="file" 
-                    accept="image/*"
+                    type="file"
+                    accept="image/jpeg,image/png,image/gif"
                     multiple
                     @change="handleFileChange"
-                    style="display: none"
                   >
-                  <div class="file-upload-icon">📎</div>
-                  <p v-if="form.files.length === 0">
-                    {{ $t('commission.uploadHint') }}
-                  </p>
-                  <div v-else class="file-list">
-                    <span v-for="(file, idx) in form.files" :key="idx" class="file-tag">
-                      {{ file.name }}
-                      <button type="button" @click.stop="removeFile(idx)">×</button>
-                    </span>
-                  </div>
+                  <span class="upload-symbol">+</span>
+                  <p>{{ copy.uploadHint }}</p>
+                  <small>{{ copy.uploadLimit }}</small>
                 </div>
+                <ul v-if="form.files.length" class="file-list">
+                  <li v-for="(file, index) in form.files" :key="`${file.name}-${file.lastModified}`">
+                    <span>{{ file.name }}</span>
+                    <small>{{ formatFileSize(file.size) }}</small>
+                    <button type="button" :aria-label="copy.removeFile" @click="removeFile(index)">×</button>
+                  </li>
+                </ul>
               </div>
 
-              <!-- 条款同意 -->
-              <div class="form-group terms-group">
-                <label class="terms-label">
-                  <input type="checkbox" v-model="form.agreedTerms" required>
-                  <span>
-                    {{ $t('commission.terms') }}
-                    <a href="#" @click.prevent="showTerms = true">{{ $t('commission.termsLink') }}</a>
-                  </span>
-                </label>
-              </div>
+              <label class="terms-label">
+                <input v-model="form.agreedTerms" type="checkbox" required>
+                <span>
+                  {{ $t('commission.terms') }}
+                  <button type="button" class="terms-link" @click="showTerms = true">{{ $t('commission.termsLink') }}</button>
+                </span>
+              </label>
 
-              <button type="submit" class="btn btn-primary submit-btn" :disabled="submitting || !form.agreedTerms">
-                {{ submitting ? $t('commission.submitting') : $t('commission.submit') }}
+              <p v-if="formError" class="form-error" role="alert">{{ formError }}</p>
+              <button
+                type="submit"
+                class="btn btn-primary submit-btn"
+                :disabled="submitting || !artists.length"
+              >
+                {{ submitting ? copy.submittingProgress : $t('commission.submit') }}
               </button>
             </form>
-          </div>
-        </div>
+          </section>
+        </template>
       </div>
     </section>
 
-    <!-- 委托条款弹窗 -->
-    <div v-if="showTerms" class="terms-modal" @click.self="showTerms = false">
-      <div class="terms-modal-content">
-        <div class="terms-header">
+    <div v-if="showTerms" class="modal-backdrop" @click.self="showTerms = false">
+      <section class="terms-modal" role="dialog" aria-modal="true" :aria-label="$t('commission.termsTitle')">
+        <header>
           <h2>{{ $t('commission.termsTitle') }}</h2>
-          <button class="close-btn" @click="showTerms = false">×</button>
-        </div>
+          <button type="button" :aria-label="$t('common.close')" @click="showTerms = false">×</button>
+        </header>
         <div class="terms-body">
           <template v-for="(section, index) in termsSections" :key="section.title">
             <h3>{{ index + 1 }}. {{ section.title }}</h3>
             <p>{{ section.content }}</p>
           </template>
         </div>
-        <div class="terms-footer">
-          <button class="btn btn-primary" @click="showTerms = false; form.agreedTerms = true">
-            {{ $t('commission.termsAgree') }}
-          </button>
-        </div>
-      </div>
+        <footer>
+          <button type="button" class="btn btn-primary" @click="acceptTerms">{{ $t('commission.termsAgree') }}</button>
+        </footer>
+      </section>
     </div>
 
-    <!-- 提交成功弹窗 -->
-    <div v-if="showSuccess" class="success-modal" @click.self="showSuccess = false">
-      <div class="success-modal-content">
-        <div class="success-icon">✓</div>
+    <div v-if="showSuccess" class="modal-backdrop" @click.self="showSuccess = false">
+      <section class="success-modal" role="dialog" aria-modal="true">
+        <span class="success-mark">✓</span>
         <h2>{{ $t('commission.submittedSuccess') }}</h2>
-        <div class="order-info">
-          <p>{{ $t('commission.orderNumber') }}：</p>
-          <div class="order-number">{{ orderNumber }}</div>
-          <p class="hint">{{ $t('commission.orderNumberHint') }}</p>
-        </div>
+        <p>{{ $t('commission.orderNumber') }}</p>
+        <strong>{{ orderNumber }}</strong>
+        <p class="success-hint">{{ $t('commission.orderNumberHint') }}</p>
         <div class="success-actions">
-          <router-link :to="`/orders?order=${orderNumber}`" class="btn btn-primary">
+          <router-link :to="`/orders?order=${encodeURIComponent(orderNumber)}`" class="btn btn-primary">
             {{ $t('order.query') }}
           </router-link>
-          <button class="btn btn-secondary" @click="copyOrderNumber">
+          <button type="button" class="outline-button" @click="copyOrderNumber">
             {{ $t('commission.copyOrderNumber') }}
           </button>
         </div>
-      </div>
+      </section>
     </div>
-  </div>
+  </main>
 </template>
 
 <script>
-import { Calendar } from '../utils/calendar'
-import { showToast } from '../utils/eventBus'
 import { inject } from 'vue'
-import { API_ENDPOINTS, getApiUrl } from '../config/api'
+import { API_ENDPOINTS, getAssetUrl } from '../config/api'
+import { apiRequest, showToast } from '../utils/eventBus'
+import { getCurrentUser } from '../utils/auth'
+
+const COPY = {
+  zh: {
+    chooseArtist: '选择画师',
+    chooseArtistHint: '从已认证且开放约稿的画师中选择合作对象',
+    loadingArtists: '正在加载可约稿画师...',
+    noArtists: '当前没有开放约稿的画师，请稍后再试。',
+    retry: '重新加载',
+    artistFallbackBio: '已认证画师',
+    formHint: '详细需求会帮助画师更准确地评估报价和工期',
+    title: '委托标题',
+    titlePlaceholder: '例如：原创角色半身头像',
+    uploadHint: '点击或拖拽图片到这里',
+    uploadLimit: 'JPG、PNG 或 GIF，单张不超过 10MB，最多 9 张',
+    removeFile: '移除文件',
+    clientOnly: '只有委托人账号可以提交新委托。画师和管理员仍可在订单与消息页面处理已有事务。',
+    chooseArtistError: '请选择画师',
+    chooseTypeError: '请选择委托类型',
+    descriptionTooLong: '组合后的需求内容超过 5000 字，请精简描述或细节。',
+    invalidFileType: '仅支持 JPG、PNG 或 GIF 图片',
+    fileTooLarge: '单张图片不能超过 10MB',
+    tooManyFiles: '参考图最多上传 9 张',
+    submittingProgress: '正在上传并提交...',
+    created: '委托已提交',
+    copyFailed: '复制失败，请手动记录订单号',
+    artistLoadFailed: '无法加载画师列表'
+  },
+  en: {
+    chooseArtist: 'Choose an artist',
+    chooseArtistHint: 'Select from verified artists who are currently open for commissions',
+    loadingArtists: 'Loading available artists...',
+    noArtists: 'No artists are accepting commissions right now. Please try again later.',
+    retry: 'Try again',
+    artistFallbackBio: 'Verified artist',
+    formHint: 'A clear brief helps the artist estimate pricing and delivery time',
+    title: 'Commission title',
+    titlePlaceholder: 'Example: Original character portrait',
+    uploadHint: 'Click or drag reference images here',
+    uploadLimit: 'JPG, PNG, or GIF; up to 10MB each and 9 files total',
+    removeFile: 'Remove file',
+    clientOnly: 'Only client accounts can submit a new commission. Artists and administrators can still manage existing work from Orders and Messages.',
+    chooseArtistError: 'Choose an artist first.',
+    chooseTypeError: 'Choose a commission type first.',
+    descriptionTooLong: 'The combined brief exceeds 5,000 characters. Shorten the description or notes.',
+    invalidFileType: 'Only JPG, PNG, or GIF images are supported.',
+    fileTooLarge: 'Each image must be 10MB or smaller.',
+    tooManyFiles: 'You can upload up to 9 reference images.',
+    submittingProgress: 'Uploading and submitting...',
+    created: 'Commission submitted.',
+    copyFailed: 'Copy failed. Please record the order number manually.',
+    artistLoadFailed: 'Unable to load artists.'
+  }
+}
+
+const STYLE_IMAGES = {
+  avatar: '/images/art-avatar.jpg',
+  character: '/images/art-character.jpg',
+  illustration: '/images/art-scene.jpg',
+  concept: '/images/art-concept.jpg'
+}
 
 export default {
   name: 'Commission',
   setup() {
-    const i18n = inject('i18n')
-    return { i18n }
+    return { i18n: inject('i18n') }
   },
   data() {
     return {
+      currentUser: getCurrentUser(),
+      artists: [],
+      loadingArtists: false,
+      artistError: '',
+      selectedArtistId: null,
       selectedStyle: '',
-      isGuestMode: true,
-      isLoggedIn: false,
       submitting: false,
       dragOver: false,
       showTerms: false,
       showSuccess: false,
       orderNumber: '',
-      calendar: new Calendar({ readOnly: true }),
-      calendarData: { year: 2026, month: 3, days: [] },
-      form: {
-        client_name: '',
-        contact_type: 'qq',
-        contact_value: '',
-        usage: '',
-        description: '',
-        details: '',
-        budget: '',
-        schedule_date: '',
-        files: [],
-        agreedTerms: false
-      }
+      formError: '',
+      form: this.emptyForm()
     }
-  },
-  mounted() {
-    this.updateCalendar()
-    this.checkLoginStatus()
-    this.loadSchedule()
   },
   computed: {
     locale() {
       return this.i18n.getLocale()
     },
-    weekdays() {
-      return this.locale === 'zh'
-        ? ['日', '一', '二', '三', '四', '五', '六']
-        : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+    copy() {
+      return COPY[this.locale]
     },
     localizedStyles() {
-      const colors = {
-        avatar: '6b8e6b',
-        character: 'd4a574',
-        illustration: '4a6b4a',
-        concept: '8b7355'
-      }
-
-      return this.$t('commission.styles').map((style) => ({
-        ...style,
-        image: this.createStyleImage(colors[style.key], style.placeholder || style.name)
-      }))
+      return this.$t('commission.styles').map((style) => ({ ...style, image: STYLE_IMAGES[style.key] }))
+    },
+    selectedStyleData() {
+      return this.localizedStyles.find((style) => style.key === this.selectedStyle)
     },
     usageOptions() {
       return [
@@ -330,598 +355,251 @@ export default {
         { value: '1500+', label: '¥1500+' }
       ]
     },
-    calendarTitle() {
-      return this.formatCalendarTitle()
-    },
     termsSections() {
       return this.$t('commission.termsSections')
+    },
+    today() {
+      const now = new Date()
+      const offset = now.getTimezoneOffset() * 60000
+      return new Date(now.getTime() - offset).toISOString().slice(0, 10)
     }
   },
+  mounted() {
+    if (this.currentUser?.role === 'CLIENT') this.loadArtists()
+  },
   methods: {
-    createStyleImage(color, label) {
-      return `https://via.placeholder.com/400x200/${color}/ffffff?text=${encodeURIComponent(label)}`
-    },
-    formatCalendarTitle() {
-      const date = new Date(this.calendarData.year, this.calendarData.month - 1, 1)
-      const locale = this.locale === 'zh' ? 'zh-CN' : 'en-US'
-      const formatted = new Intl.DateTimeFormat(locale, {
-        year: 'numeric',
-        month: 'long'
-      }).format(date)
-
-      return this.locale === 'zh' ? formatted.replace(/\s/g, '') : formatted
-    },
-    checkLoginStatus() {
-      const token = localStorage.getItem('furest-token')
-      this.isLoggedIn = !!token
-      if (this.isLoggedIn) {
-        this.isGuestMode = false
-      }
-    },
-    updateCalendar() {
-      this.calendarData = this.calendar.getMonthData()
-    },
-    changeMonth(delta) {
-      this.calendar.changeMonth(delta)
-      this.updateCalendar()
-      this.loadSchedule()
-    },
-    async loadSchedule() {
-      // 模拟加载排期数据
-      const occupiedDates = ['2026-03-15', '2026-03-16', '2026-03-20', '2026-03-25']
-      this.calendarData.days = this.calendarData.days.map(day => ({
-        ...day,
-        isOccupied: occupiedDates.includes(day.date)
-      }))
-    },
-    handleFileChange(e) {
-      const files = Array.from(e.target.files)
-      this.addFiles(files)
-    },
-    handleDrop(e) {
-      this.dragOver = false
-      const files = Array.from(e.dataTransfer.files)
-      this.addFiles(files)
-    },
-    addFiles(files) {
-      const imageFiles = files.filter(f => f.type.startsWith('image/'))
-      this.form.files.push(...imageFiles)
-      if (imageFiles.length < files.length) {
-        showToast(this.$t('commission.imageOnlyError'), 'error')
-      }
-    },
-    removeFile(index) {
-      this.form.files.splice(index, 1)
-    },
-    async submitForm() {
-      if (!this.selectedStyle) {
-        showToast(this.$t('commission.styleRequiredError'), 'error')
-        return
-      }
-
-      if (!this.form.agreedTerms) {
-        showToast(this.$t('commission.termsRequiredError'), 'error')
-        return
-      }
-
-      this.submitting = true
-
-      try {
-        const formData = new FormData()
-        formData.append('style', this.selectedStyle)
-        formData.append('client_name', this.form.client_name)
-        formData.append('contact_type', this.form.contact_type)
-        formData.append('contact_value', this.form.contact_value)
-        formData.append('usage', this.form.usage)
-        formData.append('description', this.form.description)
-        formData.append('details', this.form.details)
-        formData.append('budget', this.form.budget)
-        formData.append('schedule_date', this.form.schedule_date)
-        formData.append('agreed_terms', this.form.agreedTerms)
-
-        this.form.files.forEach((file, index) => {
-          formData.append(`reference_files[${index}]`, file)
-        })
-
-        // 调用新 API
-        const endpoint = this.isGuestMode ? 
-          API_ENDPOINTS.GUEST_COMMISSION : 
-          API_ENDPOINTS.GUEST_COMMISSION
-
-        const response = await fetch(getApiUrl(endpoint), {
-          method: 'POST',
-          body: formData
-        })
-
-        const data = await response.json()
-
-        if (response.ok) {
-          this.orderNumber = data.order_id || 'ORD' + Date.now()
-          this.showSuccess = true
-          this.resetForm()
-        } else {
-          showToast(data.error || this.$t('commission.submitFailed'), 'error')
-        }
-      } catch (error) {
-        // 演示模式
-        this.orderNumber = 'ORD' + Date.now()
-        this.showSuccess = true
-        this.resetForm()
-      } finally {
-        this.submitting = false
-      }
-    },
-    resetForm() {
-      this.form = {
-        client_name: '',
-        contact_type: 'qq',
-        contact_value: '',
+    emptyForm() {
+      return {
+        title: '',
         usage: '',
         description: '',
         details: '',
         budget: '',
-        schedule_date: '',
+        scheduleDate: '',
         files: [],
         agreedTerms: false
       }
-      this.selectedStyle = ''
     },
-    copyOrderNumber() {
-      navigator.clipboard.writeText(this.orderNumber)
-      showToast(this.$t('commission.orderCopied'), 'success')
+    async loadArtists() {
+      this.loadingArtists = true
+      this.artistError = ''
+      try {
+        const data = await apiRequest(API_ENDPOINTS.SITE_HOME, { auth: false, showError: false })
+        this.artists = Array.isArray(data?.featured_artists) ? data.featured_artists : []
+        if (!this.selectedArtistId && this.artists.length) this.selectedArtistId = this.artists[0].uid
+      } catch (error) {
+        this.artistError = error.message || this.copy.artistLoadFailed
+      } finally {
+        this.loadingArtists = false
+      }
+    },
+    avatarStyle(artist) {
+      const url = getAssetUrl(artist.avatar_url)
+      return url ? { backgroundImage: `url("${url.replace(/"/g, '%22')}")` } : {}
+    },
+    artistInitial(artist) {
+      return String(artist.nickname || 'A').slice(0, 1).toUpperCase()
+    },
+    formatPriceRange(artist) {
+      if (!artist.price_range_min && !artist.price_range_max) return this.locale === 'zh' ? '价格面议' : 'Ask for quote'
+      const min = Math.round((artist.price_range_min || 0) / 100)
+      const max = Math.round((artist.price_range_max || artist.price_range_min || 0) / 100)
+      return `¥${min}-${max}`
+    },
+    handleFileChange(event) {
+      this.addFiles(Array.from(event.target.files || []))
+      event.target.value = ''
+    },
+    handleDrop(event) {
+      this.dragOver = false
+      this.addFiles(Array.from(event.dataTransfer.files || []))
+    },
+    addFiles(files) {
+      const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/gif'])
+      let rejectedType = false
+      let rejectedSize = false
+      const accepted = files.filter((file) => {
+        if (!allowedTypes.has(file.type)) {
+          rejectedType = true
+          return false
+        }
+        if (file.size > 10 * 1024 * 1024) {
+          rejectedSize = true
+          return false
+        }
+        return true
+      })
+      const availableSlots = 9 - this.form.files.length
+      this.form.files.push(...accepted.slice(0, availableSlots))
+      if (rejectedType) showToast(this.copy.invalidFileType, 'error')
+      if (rejectedSize) showToast(this.copy.fileTooLarge, 'error')
+      if (accepted.length > availableSlots) showToast(this.copy.tooManyFiles, 'error')
+    },
+    removeFile(index) {
+      this.form.files.splice(index, 1)
+    },
+    formatFileSize(bytes) {
+      return bytes < 1024 * 1024
+        ? `${Math.max(1, Math.round(bytes / 1024))} KB`
+        : `${(bytes / 1024 / 1024).toFixed(1)} MB`
+    },
+    buildDescription() {
+      const labels = this.locale === 'zh'
+        ? { usage: '作品用途', budget: '预算范围', date: '期望日期', details: '补充细节' }
+        : { usage: 'Usage', budget: 'Budget', date: 'Preferred date', details: 'Additional details' }
+      const usageLabel = this.usageOptions.find((option) => option.value === this.form.usage)?.label || this.form.usage
+      const metadata = [
+        `${labels.usage}: ${usageLabel}`,
+        this.form.budget ? `${labels.budget}: ¥${this.form.budget}` : '',
+        this.form.scheduleDate ? `${labels.date}: ${this.form.scheduleDate}` : '',
+        this.form.details ? `${labels.details}: ${this.form.details}` : ''
+      ].filter(Boolean)
+      return `${this.form.description}\n\n${metadata.join('\n')}`.trim()
+    },
+    async uploadReferences() {
+      const references = []
+      for (const file of this.form.files) {
+        const body = new FormData()
+        body.append('file', file)
+        const uploaded = await apiRequest(API_ENDPOINTS.UPLOAD, { method: 'POST', body })
+        references.push(uploaded.url)
+      }
+      return references
+    },
+    async submitForm() {
+      this.formError = ''
+      if (!this.selectedArtistId) {
+        this.formError = this.copy.chooseArtistError
+        return
+      }
+      if (!this.selectedStyleData) {
+        this.formError = this.copy.chooseTypeError
+        return
+      }
+      const description = this.buildDescription()
+      if (description.length > 5000) {
+        this.formError = this.copy.descriptionTooLong
+        return
+      }
+
+      this.submitting = true
+      try {
+        const references = await this.uploadReferences()
+        const result = await apiRequest(API_ENDPOINTS.COMMISSIONS, {
+          method: 'POST',
+          body: {
+            artist_id: this.selectedArtistId,
+            order_type: this.selectedStyleData.name,
+            title: this.form.title,
+            description,
+            references
+          }
+        })
+        this.orderNumber = result.order_no
+        this.showSuccess = true
+        this.form = this.emptyForm()
+        this.selectedStyle = ''
+        showToast(this.copy.created, 'success')
+      } catch (error) {
+        this.formError = error.message
+      } finally {
+        this.submitting = false
+      }
+    },
+    acceptTerms() {
+      this.form.agreedTerms = true
+      this.showTerms = false
+    },
+    async copyOrderNumber() {
+      try {
+        await navigator.clipboard.writeText(this.orderNumber)
+        showToast(this.$t('commission.orderCopied'), 'success')
+      } catch {
+        showToast(this.copy.copyFailed, 'error')
+      }
     }
   }
 }
 </script>
 
 <style scoped>
-.commission-section {
-  padding: 60px 0;
-}
-
-.commission-steps {
-  max-width: 800px;
-  margin: 0 auto;
-}
-
-.step {
-  background: var(--white);
-  border-radius: var(--radius);
-  padding: 40px;
-  margin-bottom: 30px;
-  box-shadow: var(--shadow);
-}
-
-.step-header {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  margin-bottom: 30px;
-}
-
-.step-number {
-  width: 50px;
-  height: 50px;
-  background: var(--primary-color);
-  color: var(--white);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.5rem;
-  font-weight: bold;
-}
-
-.step-header h3 {
-  font-size: 1.3rem;
-  color: var(--text-dark);
-}
-
-/* 模式选择 */
-.mode-selection {
-  display: flex;
-  gap: 20px;
-  margin-bottom: 25px;
-  padding: 15px;
-  background: var(--bg-light);
-  border-radius: var(--radius);
-}
-
-.mode-option {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-}
-
-.mode-option input {
-  width: 18px;
-  height: 18px;
-}
-
-.login-prompt {
-  text-align: center;
-  padding: 40px;
-  background: var(--bg-light);
-  border-radius: var(--radius);
-}
-
-.login-prompt p {
-  margin-bottom: 15px;
-  color: var(--text-muted);
-}
-
-/* 联系方式输入 */
-.contact-input-group {
-  display: flex;
-  gap: 10px;
-}
-
-.contact-type {
-  width: 100px;
-  padding: 12px;
-  border: 1px solid #ddd;
-  border-radius: var(--radius-sm);
-  background: var(--white);
-}
-
-.contact-input-group input {
-  flex: 1;
-}
-
-/* 日期选择日历 */
-.commission-calendar {
-  background: var(--white);
-  border: 1px solid #e0e0e0;
-  border-radius: var(--radius);
-  padding: 20px;
-  margin-top: 10px;
-  width: 100%;
-  overflow: hidden;
-}
-
-.commission-calendar__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 15px;
-  gap: 16px;
-}
-
-.commission-calendar__title {
-  font-size: 1.2rem;
-  color: var(--text-dark);
-  margin: 0;
-  line-height: 1.2;
-}
-
-.commission-calendar__nav {
-  display: flex;
-  gap: 10px;
-  flex-shrink: 0;
-}
-
-.commission-calendar__nav-btn {
-  width: 32px;
-  height: 32px;
-  border: 1px solid #ddd;
-  background: var(--white);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  font-size: 1rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-}
-
-.commission-calendar__nav-btn:hover {
-  background: var(--primary-color);
-  color: var(--white);
-  border-color: var(--primary-color);
-}
-
-.commission-calendar__grid {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 8px;
-  width: 100%;
-}
-
-.commission-calendar__weekday,
-.commission-calendar__day {
-  min-width: 0;
-}
-
-.commission-calendar__weekday {
-  text-align: center;
-  font-weight: 600;
-  color: var(--text-muted);
-  padding: 8px 0;
-  font-size: 0.9rem;
-}
-
-.commission-calendar__day {
-  aspect-ratio: 1 / 1;
-  min-height: 48px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 6px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  font-size: 0.95rem;
-  position: relative;
-  transition: all 0.2s;
-  background: var(--bg-light);
-  line-height: 1;
-}
-
-.commission-calendar__day:hover:not(.is-other-month):not(.is-occupied) {
-  background: var(--primary-color);
-  color: var(--white);
-}
-
-.commission-calendar__day.is-other-month {
-  color: #ccc;
-  background: transparent;
-  cursor: default;
-}
-
-.commission-calendar__day.is-selected {
-  background: var(--primary-color);
-  color: var(--white);
-  font-weight: bold;
-}
-
-.commission-calendar__day.is-occupied {
-  background: #ffebee;
-  color: #e74c3c;
-  cursor: not-allowed;
-}
-
-.date-hint {
-  margin-top: 10px;
-  color: var(--text-light);
-}
-
-.commission-calendar__marker {
-  position: absolute;
-  bottom: 2px;
-  font-size: 0.6rem;
-  color: #e74c3c;
-  background: #ffebee;
-  padding: 0 4px;
-  border-radius: 2px;
-}
-
-@media (max-width: 480px) {
-  .commission-calendar {
-    padding: 16px;
-  }
-
-  .commission-calendar__grid {
-    gap: 6px;
-  }
-
-  .commission-calendar__day {
-    min-height: 40px;
-    font-size: 0.9rem;
-  }
-}
-
-/* 文件上传 */
-.file-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.file-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  background: var(--primary-color);
-  color: white;
-  padding: 5px 12px;
-  border-radius: 15px;
-  font-size: 0.85rem;
-}
-
-.file-tag button {
-  background: none;
-  border: none;
-  color: white;
-  cursor: pointer;
-  font-size: 1rem;
-  padding: 0;
-  width: 16px;
-  height: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* 条款 */
-.terms-group {
-  margin-top: 25px;
-}
-
-.terms-label {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  cursor: pointer;
-}
-
-.terms-label input {
-  width: 18px;
-  height: 18px;
-  margin-top: 2px;
-}
-
-.terms-label a {
-  color: var(--primary-color);
-}
-
-/* 条款弹窗 */
-.terms-modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0,0,0,0.5);
-  z-index: 2000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-}
-
-.terms-modal-content {
-  background: var(--white);
-  border-radius: var(--radius);
-  width: 100%;
-  max-width: 600px;
-  max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-}
-
-.terms-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px 30px;
-  border-bottom: 1px solid #eee;
-}
-
-.terms-header h2 {
-  font-size: 1.3rem;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  cursor: pointer;
-  color: var(--text-muted);
-}
-
-.terms-body {
-  padding: 30px;
-  overflow-y: auto;
-  line-height: 1.8;
-}
-
-.terms-body h3 {
-  margin: 20px 0 10px;
-  color: var(--text-dark);
-}
-
-.terms-body h3:first-child {
-  margin-top: 0;
-}
-
-.terms-body p {
-  color: var(--text-light);
-  margin-bottom: 10px;
-}
-
-.terms-footer {
-  padding: 20px 30px;
-  border-top: 1px solid #eee;
-  text-align: right;
-}
-
-/* 成功弹窗 */
-.success-modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0,0,0,0.5);
-  z-index: 2000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-}
-
-.success-modal-content {
-  background: var(--white);
-  border-radius: var(--radius);
-  padding: 40px;
-  text-align: center;
-  max-width: 450px;
-  width: 100%;
-}
-
-.success-icon {
-  width: 70px;
-  height: 70px;
-  background: #d4edda;
-  color: #155724;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 2rem;
-  margin: 0 auto 20px;
-}
-
-.success-modal-content h2 {
-  margin-bottom: 20px;
-  color: var(--text-dark);
-}
-
-.order-info {
-  margin-bottom: 25px;
-}
-
-.order-number {
-  font-size: 1.8rem;
-  font-weight: bold;
-  font-family: monospace;
-  letter-spacing: 2px;
-  color: var(--primary-color);
-  margin: 10px 0;
-}
-
-.hint {
-  color: var(--text-muted);
-  font-size: 0.9rem;
-}
-
-.success-actions {
-  display: flex;
-  gap: 15px;
-  justify-content: center;
-}
-
+.commission-section { padding: 64px 0 96px; }
+.commission-shell { max-width: 920px; }
+.step-panel { background: var(--white); border-radius: var(--radius); padding: 40px; margin-bottom: 32px; box-shadow: var(--shadow); }
+.step-heading { display: flex; align-items: center; gap: 16px; margin-bottom: 28px; }
+.step-heading h2 { font-weight: 600; font-size: 1.35rem; margin: 0 0 4px; }
+.step-heading p { color: var(--text-muted); margin: 0; }
+.step-number { width: 40px; height: 40px; flex: 0 0 40px; display: grid; place-items: center; background: var(--text-dark); color: var(--white); font-weight: 600; border-radius: 50%; }
+.notice { margin-bottom: 24px; line-height: 1.7; }
+.notice-error { color: #B91C1C; }
+.inline-state { padding: 32px 0; text-align: center; color: var(--text-light); }
+.error-state p { margin-bottom: 10px; }
+.text-button { border: 0; padding: 0; background: transparent; color: var(--primary-color); font-weight: 600; cursor: pointer; transition: var(--transition); }
+.text-button:hover { color: var(--primary-dark); }
+.artist-grid { display: grid; gap: 16px; }
+.artist-option { width: 100%; min-height: 94px; display: grid; grid-template-columns: 58px minmax(0, 1fr) auto; align-items: center; gap: 16px; padding: 16px; text-align: left; border: 1px solid transparent; background: var(--white); border-radius: var(--radius); box-shadow: var(--shadow); cursor: pointer; transition: var(--transition), box-shadow 0.3s ease; }
+.artist-option:hover { box-shadow: var(--shadow-hover); }
+.artist-option.selected { border-color: var(--primary-color); }
+.avatar { width: 58px; height: 58px; display: grid; place-items: center; background: #F5F5F5 center/cover no-repeat; color: var(--text-dark); font-size: 1.25rem; font-weight: 600; border-radius: 50%; }
+.artist-details { min-width: 0; display: grid; gap: 4px; }
+.artist-details strong { color: var(--text-dark); font-weight: 600; }
+.artist-details small { color: var(--text-light); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.artist-price { color: var(--text-dark); font-weight: 600; white-space: nowrap; }
+.tag-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag-row span { padding: 2px 8px; background: #F5F5F5; color: var(--text-muted); font-size: 0.74rem; border-radius: var(--radius-sm); }
+.type-heading { margin: 32px 0 16px; }
+.type-heading h3 { font-size: 1rem; font-weight: 600; }
+.style-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.style-option { min-width: 0; display: grid; grid-template-columns: 86px minmax(0, 1fr); grid-template-rows: auto auto; gap: 0 14px; align-items: center; padding: 0; overflow: hidden; text-align: left; border: 1px solid transparent; background: var(--white); border-radius: var(--radius); box-shadow: var(--shadow); cursor: pointer; transition: var(--transition), box-shadow 0.3s ease; }
+.style-option:hover { box-shadow: var(--shadow-hover); }
+.style-option.selected { border-color: var(--primary-color); }
+.style-option img { grid-row: 1 / 3; width: 86px; height: 94px; object-fit: cover; }
+.style-copy { min-width: 0; align-self: end; display: grid; padding: 11px 10px 2px 0; }
+.style-copy strong { font-size: 0.98rem; font-weight: 600; }
+.style-copy small { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.style-price { align-self: start; padding: 2px 10px 10px 0; color: var(--text-dark); font-size: 0.84rem; font-weight: 600; }
+.field-counter { display: block; text-align: right; color: var(--text-muted); font-size: 0.78rem; margin-top: 4px; }
+.file-upload { padding: 32px; }
+.upload-symbol { display: grid; place-items: center; width: 38px; height: 38px; margin: 0 auto 8px; border: 1px solid #E5E5E5; color: var(--primary-color); font-size: 1.5rem; border-radius: 50%; }
+.file-upload small { color: var(--text-muted); }
+.file-list { display: grid; gap: 8px; margin-top: 12px; }
+.file-list li { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto 28px; gap: 10px; align-items: center; padding: 9px 12px; background: #F5F5F5; border-radius: var(--radius); }
+.file-list span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-list small { color: var(--text-muted); }
+.file-list button { width: 28px; height: 28px; border: 0; background: transparent; color: #B91C1C; font-size: 1.2rem; cursor: pointer; transition: var(--transition); }
+.terms-label { display: flex; align-items: flex-start; gap: 10px; margin: 6px 0 20px; line-height: 1.5; }
+.terms-label input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--primary-color); }
+.terms-link { border: 0; padding: 0; background: transparent; color: var(--primary-color); text-decoration: underline; cursor: pointer; font: inherit; transition: var(--transition); }
+.terms-link:hover { color: var(--primary-dark); }
+.form-error { margin: 0 0 16px; color: #B91C1C; }
+.submit-btn { width: 100%; }
+.modal-backdrop { position: fixed; inset: 0; z-index: 2100; display: grid; place-items: center; padding: 20px; background: rgba(0, 0, 0, 0.45); }
+.terms-modal, .success-modal { width: min(100%, 620px); max-height: 85vh; background: var(--white); border-radius: var(--radius); box-shadow: var(--shadow-hover); overflow: hidden; }
+.terms-modal { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
+.terms-modal header, .terms-modal footer { padding: 20px 24px; display: flex; align-items: center; justify-content: space-between; }
+.terms-modal footer { justify-content: flex-end; }
+.terms-modal header h2 { font-weight: 600; }
+.terms-modal header button { width: 36px; height: 36px; border: 0; background: transparent; font-size: 1.5rem; cursor: pointer; transition: var(--transition); }
+.terms-modal header button:hover { color: var(--primary-color); }
+.terms-body { overflow-y: auto; padding: 8px 24px 24px; }
+.terms-body h3 { margin: 18px 0 6px; font-size: 1rem; font-weight: 600; }
+.terms-body h3:first-child { margin-top: 0; }
+.terms-body p { color: var(--text-light); line-height: 1.75; }
+.success-modal { max-width: 460px; padding: 40px 36px; text-align: center; }
+.success-mark { width: 56px; height: 56px; margin: 0 auto 16px; display: grid; place-items: center; background: #F0FDF4; color: #15803D; border-radius: 50%; font-size: 1.8rem; }
+.success-modal h2 { margin-bottom: 18px; font-weight: 600; }
+.success-modal > strong { display: block; margin: 8px 0; color: var(--text-dark); font: 600 1.4rem/1.2 monospace; overflow-wrap: anywhere; }
+.success-hint { color: var(--text-muted); }
+.success-actions { display: flex; justify-content: center; gap: 12px; margin-top: 24px; }
+.outline-button { padding: 11px 18px; border: 1px solid var(--primary-color); background: var(--white); color: var(--primary-color); border-radius: var(--radius); font-weight: 600; cursor: pointer; transition: var(--transition); }
+.outline-button:hover { background: var(--primary-color); color: var(--white); }
 @media (max-width: 768px) {
-  .step {
-    padding: 25px;
-  }
-  
-  .mode-selection {
-    flex-direction: column;
-    gap: 10px;
-  }
-  
-  .contact-input-group {
-    flex-direction: column;
-  }
-  
-  .contact-type {
-    width: 100%;
-  }
-  
-  .success-actions {
-    flex-direction: column;
-  }
+  .commission-section { padding: 32px 0 64px; }
+  .step-panel { padding: 24px 20px; }
+  .style-options { grid-template-columns: 1fr; }
+  .artist-option { grid-template-columns: 50px minmax(0, 1fr); }
+  .avatar { width: 50px; height: 50px; }
+  .artist-price { grid-column: 2; }
+  .success-actions { flex-direction: column; }
 }
 </style>

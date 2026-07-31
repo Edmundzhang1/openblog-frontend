@@ -171,6 +171,15 @@ export function registerLocalUser({ username, password, email }) {
   return { ok: true, user: sanitizeUser(newUser) }
 }
 
+export function updateStoredUser(updates) {
+  const current = getCurrentUser()
+  if (!current || !updates || typeof updates !== 'object') return current
+  const merged = sanitizeUser({ ...current, ...updates })
+  localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(merged))
+  emitAuthChanged()
+  return merged
+}
+
 export function clearSession() {
   localStorage.removeItem(STORAGE_KEYS.TOKEN)
   localStorage.removeItem(STORAGE_KEYS.USER)

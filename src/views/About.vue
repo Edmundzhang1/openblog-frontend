@@ -23,7 +23,7 @@
           </aside>
 
           <div class="about-content">
-            <!-- 工作室历史 -->
+            <!-- 平台能力 -->
             <div v-if="activeSection === 'history'" class="about-content-section">
               <h3>{{ content.historyTitle }}</h3>
               <div class="timeline">
@@ -35,7 +35,7 @@
               </div>
             </div>
 
-            <!-- 创作理念 -->
+            <!-- 平台原则 -->
             <div v-if="activeSection === 'philosophy'" class="about-content-section">
               <h3>{{ content.philosophyTitle }}</h3>
               <div v-for="(item, index) in philosophy" :key="index" style="margin-bottom: 20px;">
@@ -44,12 +44,14 @@
               </div>
             </div>
 
-            <!-- 团队成员 -->
+            <!-- 参与角色 -->
             <div v-if="activeSection === 'team'" class="about-content-section">
               <h3>{{ content.teamTitle }}</h3>
               <div class="team-grid">
                 <div v-for="(member, index) in team" :key="index" class="team-card">
-                  <div class="team-avatar">{{ member.icon }}</div>
+                  <div class="team-avatar">
+                    <component :is="member.icon" :size="32" aria-hidden="true" />
+                  </div>
                   <h4>{{ member.name }}</h4>
                   <p>{{ member.role }}</p>
                 </div>
@@ -60,7 +62,10 @@
             <div v-if="activeSection === 'services'" class="about-content-section">
               <h3>{{ content.servicesTitle }}</h3>
               <div v-for="(service, index) in services" :key="index" style="margin-bottom: 15px;">
-                <p><strong>{{ service.icon }} {{ service.title }}</strong></p>
+                <p class="service-title">
+                  <component :is="service.icon" :size="18" aria-hidden="true" />
+                  <strong>{{ service.title }}</strong>
+                </p>
                 <p>{{ service.desc }}</p>
               </div>
             </div>
@@ -85,101 +90,109 @@
 
 <script>
 import { inject } from 'vue'
+import {
+  Brush,
+  CircleUserRound,
+  FileImage,
+  Images,
+  Palette,
+  ScanFace,
+  ShieldCheck,
+  Sparkles
+} from '@lucide/vue'
 
 const ABOUT_CONTENT = {
   zh: {
-    title: '关于我们',
-    subtitle: '了解FUREST工作室的故事与理念',
-    historyTitle: '工作室历史',
-    philosophyTitle: '创作理念',
-    teamTitle: '团队成员',
-    servicesTitle: '服务范围',
+    title: '关于平台',
+    subtitle: '了解平台提供的委托协作能力与使用原则',
+    historyTitle: '平台能力',
+    philosophyTitle: '平台原则',
+    teamTitle: '参与角色',
+    servicesTitle: '常见委托类别',
     processTitle: '委托流程',
     sections: [
-      { key: 'history', label: '工作室历史' },
-      { key: 'philosophy', label: '创作理念' },
-      { key: 'team', label: '团队成员' },
-      { key: 'services', label: '服务范围' },
+      { key: 'history', label: '平台能力' },
+      { key: 'philosophy', label: '平台原则' },
+      { key: 'team', label: '参与角色' },
+      { key: 'services', label: '委托类别' },
       { key: 'process', label: '委托流程' }
     ],
     history: [
-      { date: '2023年', title: '工作室成立', desc: 'FUREST工作室正式成立，由一群热爱绘画的创作者组建。初期主要承接个人头像和Q版插画委托。' },
-      { date: '2024年', title: '业务扩展', desc: '业务范围扩展至立绘、插图、角色设计等领域。与多个独立游戏团队建立合作关系。' },
-      { date: '2025年', title: '团队壮大', desc: '团队规模扩大至10人，涵盖原画、插画、UI设计等专业人才。作品在社交媒体上获得广泛关注。' },
-      { date: '2026年', title: '品牌升级', desc: '推出全新品牌形象，建立专业约稿平台。致力于为更多创作者和客户提供优质的委托服务。' }
+      { date: '需求', title: '结构化提交', desc: '委托人可以填写作品类型、预算、需求描述和参考资料，减少关键信息遗漏。' },
+      { date: '协作', title: '订单与站内沟通', desc: '双方围绕订单查看状态、报价和进度，并通过站内会话保留沟通记录。' },
+      { date: '交付', title: '受控文件交付', desc: '平台支持草稿、带水印预览和原图交付，原图下载权限会结合订单参与者与付款状态校验。' },
+      { date: '管理', title: '审核与站点配置', desc: '管理员可以处理画师申请、用户和订单，并维护站点的基础展示信息。' }
     ],
     philosophy: [
-      { title: '用心创作，传递情感', desc: '我们相信每一幅作品都承载着创作者的心血和委托人的期待。在FUREST，我们不只是完成订单，更是用心理解每个角色的故事，用画笔传递情感。' },
-      { title: '精益求精，追求卓越', desc: '从构图到配色，从线条到光影，我们追求每一个细节的完美。不断学习和探索新的技法，只为呈现最好的作品。' },
-      { title: '真诚沟通，合作共赢', desc: '透明的沟通是合作的基础。我们重视每一位委托人的意见，通过充分的交流确保作品符合期待，实现创作者与委托人的共赢。' }
+      { title: '信息清楚', desc: '需求、报价、付款方式和交付内容应在确认合作前说明，重要变更通过订单或站内消息留痕。' },
+      { title: '边界明确', desc: '创作周期、修改范围、版权和商用权限由委托双方根据具体项目确认，平台不替双方作统一承诺。' },
+      { title: '隐私优先', desc: '公开订单查询只展示脱敏后的状态信息，详细需求、付款数据和附件仅向订单参与者与管理员开放。' }
     ],
     team: [
-      { icon: '🎨', name: '主创画师', role: '10年绘画经验，擅长日系风格' },
-      { icon: '✏️', name: '角色设计师', role: '专注角色设定与立绘' },
-      { icon: '🖼️', name: '场景插画师', role: '擅长氛围场景与背景绘制' },
-      { icon: '💼', name: '项目管理', role: '负责排单与客户沟通' }
+      { icon: CircleUserRound, name: '委托人', role: '提交需求、确认报价、跟踪订单并验收交付内容' },
+      { icon: Palette, name: '画师', role: '维护接稿信息、评估需求、更新进度并提交交付物' },
+      { icon: ShieldCheck, name: '管理员', role: '处理审核、站点配置及必要的平台管理工作' }
     ],
     services: [
-      { icon: '🎭', title: '头像绘制', desc: 'Q版、写实、半写实等多种风格，适用于社交媒体头像、个人形象展示等。' },
-      { icon: '👤', title: '角色立绘', desc: '完整的角色设计，包含精细的服装、配饰刻画，适用于游戏、Vtuber等。' },
-      { icon: '🖼️', title: '场景插图', desc: '含背景的完整插画，氛围感强，适用于小说封面、游戏宣传、壁纸等。' },
-      { icon: '📋', title: '角色设定', desc: '包含三视图、细节设定的完整角色设计文档，适用于原创IP开发。' },
-      { icon: '🎨', title: '其他定制', desc: '欢迎提出特殊需求，我们将根据项目复杂度提供定制报价。' }
+      { icon: ScanFace, title: '头像绘制', desc: '可提交头像或半身像需求，具体风格、尺寸和使用范围由画师确认。' },
+      { icon: Brush, title: '角色立绘', desc: '可提交角色造型、服装和配饰要求，并附上已有设定与参考图。' },
+      { icon: Images, title: '场景插图', desc: '可描述人物、背景、构图和氛围需求，复杂度与交付规格以报价为准。' },
+      { icon: FileImage, title: '角色设定', desc: '可提交角色设定图或设计文档需求，所含视图和细节需在订单中约定。' },
+      { icon: Sparkles, title: '其他定制', desc: '其他视觉创作需求也可提交，由画师根据能力、排期和项目范围决定是否承接。' }
     ],
     process: [
       { title: '提交申请', desc: '填写委托申请表，详细描述需求并上传参考资料。' },
-      { title: '确认沟通', desc: '我们会在24小时内回复，确认需求细节和报价。' },
-      { title: '支付定金', desc: '确认委托后支付50%定金，进入排单队列。' },
-      { title: '草稿确认', desc: '提供草图供确认，可修改至满意为止。' },
-      { title: '成图交付', desc: '完成作品后提供带水印预览，支付尾款后交付原图。' }
+      { title: '评估与报价', desc: '画师查看需求后决定是否承接，并沟通范围、报价、周期和修改约定。' },
+      { title: '确认合作', desc: '委托人确认报价；付款模式、金额和节点以双方在订单中的约定为准。' },
+      { title: '创作与反馈', desc: '画师更新订单进度并提交草稿，双方通过站内消息确认反馈和必要修改。' },
+      { title: '终稿交付', desc: '画师提交终稿；平台可提供带水印预览，并按订单权限开放原图下载。' }
     ],
     stepLabel: (index) => `第${index + 1}步`
   },
   en: {
-    title: 'About',
-    subtitle: 'Learn about the story and values behind FUREST Studio',
-    historyTitle: 'Studio History',
-    philosophyTitle: 'Creative Philosophy',
-    teamTitle: 'Team',
-    servicesTitle: 'Services',
+    title: 'About the Platform',
+    subtitle: 'Learn about the platform capabilities and collaboration principles',
+    historyTitle: 'Platform Capabilities',
+    philosophyTitle: 'Platform Principles',
+    teamTitle: 'Participant Roles',
+    servicesTitle: 'Common Commission Types',
     processTitle: 'Commission Process',
     sections: [
-      { key: 'history', label: 'History' },
-      { key: 'philosophy', label: 'Philosophy' },
-      { key: 'team', label: 'Team' },
-      { key: 'services', label: 'Services' },
+      { key: 'history', label: 'Capabilities' },
+      { key: 'philosophy', label: 'Principles' },
+      { key: 'team', label: 'Roles' },
+      { key: 'services', label: 'Commission Types' },
       { key: 'process', label: 'Process' }
     ],
     history: [
-      { date: '2023', title: 'Studio Founded', desc: 'FUREST Studio was founded by a group of artists passionate about illustration. In the early stage, the studio focused on personal avatars and chibi commission work.' },
-      { date: '2024', title: 'Business Expansion', desc: 'The studio expanded into character art, illustration, and design work, and began collaborating with multiple indie game teams.' },
-      { date: '2025', title: 'Team Growth', desc: 'The team grew to 10 members covering concept art, illustration, and UI design. The studio gained broad attention across social media.' },
-      { date: '2026', title: 'Brand Upgrade', desc: 'FUREST launched a refreshed brand identity and built a dedicated commission platform to serve more creators and clients.' }
+      { date: 'Brief', title: 'Structured Requests', desc: 'Clients can provide the commission type, budget, description, and references so important details are less likely to be missed.' },
+      { date: 'Work', title: 'Orders and On-site Chat', desc: 'Both parties can review order status, quotes, and progress while keeping communication tied to the order.' },
+      { date: 'Files', title: 'Controlled Delivery', desc: 'The platform supports drafts, watermarked previews, and original files. Original downloads are checked against participant and payment permissions.' },
+      { date: 'Admin', title: 'Review and Site Settings', desc: 'Administrators can process artist applications, manage users and orders, and maintain basic site presentation settings.' }
     ],
     philosophy: [
-      { title: 'Create with Care, Convey Emotion', desc: 'We believe every artwork carries both the creator’s effort and the client’s expectations. At FUREST, we do more than fulfill orders. We understand each character’s story and express it through illustration.' },
-      { title: 'Pursue Excellence in Every Detail', desc: 'From composition and color to linework and lighting, we aim for quality in every detail. We keep learning and refining our craft to deliver the strongest result possible.' },
-      { title: 'Communicate Honestly, Collaborate Well', desc: 'Transparent communication is the foundation of good collaboration. We value every client’s input and rely on clear discussion to align expectations and outcomes.' }
+      { title: 'Keep Information Clear', desc: 'The scope, quote, payment mode, and deliverables should be discussed before confirmation, with important changes recorded in the order or on-site chat.' },
+      { title: 'Define Boundaries', desc: 'Schedule, revision scope, copyright, and commercial rights are agreed for each project. The platform does not promise a single policy on behalf of both parties.' },
+      { title: 'Protect Privacy', desc: 'Public order lookup only returns redacted progress. Detailed briefs, payment data, and attachments are restricted to participants and administrators.' }
     ],
     team: [
-      { icon: '🎨', name: 'Lead Illustrator', role: '10 years of drawing experience with a strong anime style focus' },
-      { icon: '✏️', name: 'Character Designer', role: 'Specialized in character concept work and full-body illustrations' },
-      { icon: '🖼️', name: 'Scene Illustrator', role: 'Focused on atmospheric scenes and environment painting' },
-      { icon: '💼', name: 'Project Manager', role: 'Handles scheduling and client communication' }
+      { icon: CircleUserRound, name: 'Client', role: 'Submits requirements, confirms quotes, tracks orders, and reviews deliverables' },
+      { icon: Palette, name: 'Artist', role: 'Maintains commission details, evaluates requests, updates progress, and delivers files' },
+      { icon: ShieldCheck, name: 'Administrator', role: 'Handles reviews, site settings, and necessary platform administration' }
     ],
     services: [
-      { icon: '🎭', title: 'Avatar Art', desc: 'Chibi, realistic, and semi-realistic styles for profile pictures and personal branding.' },
-      { icon: '👤', title: 'Character Illustration', desc: 'Full character artwork with refined costume and accessory details for games, Vtubers, and more.' },
-      { icon: '🖼️', title: 'Scene Illustration', desc: 'Full illustrations with background and atmosphere for covers, promotions, and wallpapers.' },
-      { icon: '📋', title: 'Character Design', desc: 'Detailed character sheets with turnarounds and design notes for original IP development.' },
-      { icon: '🎨', title: 'Custom Requests', desc: 'If you have a special request, we can provide a custom quote based on scope and complexity.' }
+      { icon: ScanFace, title: 'Avatar Art', desc: 'Submit an avatar or portrait request. The artist confirms the style, dimensions, and usage rights.' },
+      { icon: Brush, title: 'Character Illustration', desc: 'Describe the character, outfit, and accessories, and attach any existing design references.' },
+      { icon: Images, title: 'Scene Illustration', desc: 'Describe subjects, background, composition, and mood. Scope and output specifications follow the quote.' },
+      { icon: FileImage, title: 'Character Design', desc: 'Request a character sheet or design document, with views and included details agreed in the order.' },
+      { icon: Sparkles, title: 'Custom Requests', desc: 'Other visual work may be submitted for an artist to assess against their skills, schedule, and project scope.' }
     ],
     process: [
       { title: 'Submit Request', desc: 'Fill out the commission form, describe your requirements, and upload references.' },
-      { title: 'Confirm Details', desc: 'We will reply within 24 hours to confirm scope, details, and quotation.' },
-      { title: 'Pay Deposit', desc: 'After confirmation, pay a 50% deposit to enter the queue.' },
-      { title: 'Review Draft', desc: 'A draft will be provided for review and can be revised before rendering is finalized.' },
-      { title: 'Final Delivery', desc: 'After completion, a watermarked preview is provided. The full-resolution file is delivered after final payment.' }
+      { title: 'Review and Quote', desc: 'The artist decides whether to accept and discusses scope, quote, schedule, and revision terms.' },
+      { title: 'Confirm the Order', desc: 'The client accepts the quote. Payment mode, amount, and milestones follow the agreement recorded for the order.' },
+      { title: 'Create and Review', desc: 'The artist updates progress and may submit a draft. Both parties coordinate feedback through on-site chat.' },
+      { title: 'Final Delivery', desc: 'The artist submits the final work. The platform can show a watermarked preview and grants original-file access according to order permissions.' }
     ],
     stepLabel: (index) => `Step ${index + 1}`
   }
@@ -239,63 +252,66 @@ export default {
 
 <style scoped>
 .about-section {
-  padding: 60px 0;
+  padding: 64px 0;
 }
 
 .about-container {
   display: grid;
-  grid-template-columns: 280px 1fr;
-  gap: 40px;
+  grid-template-columns: 240px 1fr;
+  gap: 64px;
   max-width: 1100px;
   margin: 0 auto;
 }
 
 @media (max-width: 768px) {
+  .about-section {
+    padding: 32px 0;
+  }
+
   .about-container {
     grid-template-columns: 1fr;
+    gap: 40px;
   }
 }
 
 .about-sidebar {
-  background: var(--white);
-  border-radius: var(--radius);
-  padding: 20px;
-  box-shadow: var(--shadow);
   height: fit-content;
 }
 
 .about-sidebar-btn {
   display: block;
   width: 100%;
-  padding: 15px 20px;
+  padding: 12px 16px;
   border: none;
   background: transparent;
   text-align: left;
   font-size: 1rem;
+  color: var(--text-light);
   cursor: pointer;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   transition: var(--transition);
-  margin-bottom: 5px;
+  margin-bottom: 4px;
 }
 
-.about-sidebar-btn:hover,
+.about-sidebar-btn:hover {
+  background: #F5F5F5;
+  color: var(--text-dark);
+}
+
 .about-sidebar-btn.active {
-  background: var(--primary-color);
-  color: var(--white);
+  background: #F5F5F5;
+  color: var(--text-dark);
+  font-weight: 600;
 }
 
 .about-content {
-  background: var(--white);
-  border-radius: var(--radius);
-  padding: 40px;
-  box-shadow: var(--shadow);
   min-height: 400px;
 }
 
 .about-content-section h3 {
   font-size: 1.5rem;
   margin-bottom: 20px;
-  color: var(--primary-color);
+  color: var(--text-dark);
 }
 
 .about-content-section p {
@@ -304,41 +320,15 @@ export default {
   line-height: 1.8;
 }
 
-.timeline {
-  position: relative;
-  padding-left: 30px;
-}
-
-.timeline::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: var(--primary-color);
-}
-
 .timeline-item {
-  position: relative;
-  margin-bottom: 30px;
-}
-
-.timeline-item::before {
-  content: '';
-  position: absolute;
-  left: -34px;
-  top: 5px;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--primary-color);
+  margin-bottom: 32px;
 }
 
 .timeline-item .date {
+  font-size: 0.85rem;
   font-weight: 600;
-  color: var(--primary-color);
-  margin-bottom: 5px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
 }
 
 .team-grid {
@@ -350,22 +340,32 @@ export default {
 
 .team-card {
   text-align: center;
-  padding: 20px;
-  background: #faf8f5;
-  border-radius: 12px;
+  padding: 24px 20px;
+  background: #F5F5F5;
+  border-radius: var(--radius);
 }
 
 .team-avatar {
-  width: 80px;
-  height: 80px;
-  background: var(--primary-color);
+  width: 72px;
+  height: 72px;
+  background: var(--white);
   border-radius: 50%;
   margin: 0 auto 15px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
-  font-size: 2rem;
+  color: var(--text-dark);
+}
+
+.service-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.service-title svg {
+  flex: 0 0 auto;
+  color: var(--text-dark);
 }
 
 .team-card h4 {
@@ -373,7 +373,7 @@ export default {
 }
 
 .team-card p {
-  color: #666;
+  color: var(--text-light);
   font-size: 0.9rem;
   margin: 0;
 }

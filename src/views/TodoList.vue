@@ -10,7 +10,7 @@
 
     <!-- 统计卡片 -->
     <div class="container">
-      <div class="stats-grid">
+      <div class="stats-grid fade-in">
         <div class="stat-card">
           <div class="stat-value">{{ statTotal }}</div>
           <div class="stat-label">本月排单</div>
@@ -25,7 +25,7 @@
         </div>
       </div>
 
-      <div class="todolist-container">
+      <div class="todolist-container fade-in">
         <!-- 左侧：日历 -->
         <div class="calendar-section">
           <div class="calendar-header">
