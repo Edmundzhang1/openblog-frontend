@@ -274,18 +274,18 @@ export default {
 .notifications-section { padding: 64px 20px; }
 .notification-layout { max-width: 920px; }
 .notification-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 20px; }
-.filter-control { display: inline-flex; padding: 3px; border: 1px solid #E5E5E5; border-radius: 8px; background: #F5F5F5; }
+.filter-control { display: inline-flex; padding: 3px; border: 1px solid #E5E7EB; border-radius: 8px; background: #F5F5F5; }
 .filter-control button { min-height: 36px; padding: 0 16px; border: 0; border-radius: 8px; background: transparent; color: var(--text-muted); font: inherit; font-weight: 700; cursor: pointer; transition: var(--transition); }
-.filter-control button.active { background: #fff; color: var(--primary-color); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); }
+.filter-control button.active { background: #fff; color: var(--accent-color); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); }
 .filter-control span { display: inline-grid; place-items: center; min-width: 19px; height: 19px; margin-left: 5px; padding: 0 5px; border-radius: 10px; background: #EF4444; color: #fff; font-size: 0.68rem; }
 .toolbar-actions, .notification-actions { display: flex; align-items: center; gap: 9px; }
-.icon-action { display: grid; place-items: center; width: 38px; height: 38px; border: 1px solid #E5E5E5; border-radius: 8px; background: #fff; color: var(--text-dark); cursor: pointer; transition: var(--transition); }
+.icon-action { display: grid; place-items: center; width: 38px; height: 38px; border: 1px solid #E5E7EB; border-radius: 8px; background: #fff; color: var(--text-dark); cursor: pointer; transition: var(--transition); }
 .mark-all, .open-related { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 38px; border: 0; border-radius: 8px; font: inherit; font-weight: 700; cursor: pointer; transition: var(--transition); }
 .mark-all { padding: 0 14px; background: var(--primary-color); color: #fff; }
-.open-related { padding: 0 12px; background: #EFF6FF; color: var(--primary-color); white-space: nowrap; }
+.open-related { padding: 0 12px; background: #EFF6FF; color: var(--accent-color); white-space: nowrap; }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
 .notification-list { display: grid; gap: 10px; }
-.notification-item { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 15px; align-items: start; padding: 20px; border: 1px solid #E5E5E5; border-radius: 8px; background: #fff; box-shadow: var(--shadow); transition: var(--transition); }
+.notification-item { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 15px; align-items: start; padding: 20px; border: 1px solid #E5E7EB; border-radius: 8px; background: #fff; box-shadow: var(--shadow); transition: var(--transition); }
 .notification-item.unread { border-left: 4px solid var(--primary-color); background: #fff; }
 .notification-type { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; }
 .order-type { background: #EFF6FF; color: #1D4ED8; }
@@ -303,7 +303,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .error-state { color: #B91C1C; }
 .empty-state strong { color: var(--text-dark); font-size: 1.05rem; }
 .pagination { display: flex; align-items: center; justify-content: center; gap: 18px; margin-top: 28px; }
-.pagination button { display: inline-flex; align-items: center; gap: 5px; min-height: 38px; padding: 0 12px; border: 1px solid #E5E5E5; border-radius: 8px; background: #fff; color: var(--text-dark); cursor: pointer; transition: var(--transition); }
+.pagination button { display: inline-flex; align-items: center; gap: 5px; min-height: 38px; padding: 0 12px; border: 1px solid #E5E7EB; border-radius: 8px; background: #fff; color: var(--text-dark); cursor: pointer; transition: var(--transition); }
 .pagination span { color: var(--text-muted); font-size: 0.88rem; }
 .spinning { animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }

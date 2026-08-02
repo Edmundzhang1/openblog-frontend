@@ -14,13 +14,10 @@ export default {
 
 <style scoped>
 .footer {
-  background: var(--text-dark);
-  color: var(--white);
-  padding: 40px 0 20px;
+  background: var(--white);
+  color: var(--text-muted);
+  border-top: 1px solid var(--border-color);
+  padding: 64px 0;
   text-align: center;
-}
-
-.footer p {
-  opacity: 0.8;
 }
 </style>

@@ -131,8 +131,8 @@
               <router-link to="/orders">{{ $t('nav.orders') || '订单' }}</router-link>
               <router-link to="/chat">{{ $t('nav.chat') || '消息' }}</router-link>
               <router-link to="/notifications">{{ notificationLabel }}</router-link>
-              <!-- 画师：显示"我的空间"快速入口 -->
-              <router-link v-if="isArtist && artistSlug && !isSpaceOwner" :to="`/@${artistSlug}`">我的空间</router-link>
+              <!-- 所有登录用户：我的主页入口（slug 未设置时回退 uid） -->
+              <router-link v-if="mySlug && !isSpaceOwner" :to="`/@${mySlug}`">{{ myPageLabel }}</router-link>
               <!-- 空间主人：显示装修入口 -->
               <router-link v-if="isSpaceOwner" :to="`/@${currentSlug}/personalization`">装修空间</router-link>
               <button @click="handleLogout" class="logout-btn">{{ $t('nav.logout') || '退出登录' }}</button>
@@ -178,6 +178,7 @@
         <!-- 全局私有路由（登录用户） -->
         <template v-if="isLoggedIn">
           <hr class="mobile-divider">
+          <router-link v-if="isLoggedIn && mySlug" :to="`/@${mySlug}`" @click="showMobileMenu = false">{{ myPageLabel }}</router-link>
           <router-link v-if="!isArtist && !isAdmin" to="/apply-artist" @click="showMobileMenu = false">申请成为画师</router-link>
           <router-link v-if="isArtist" to="/studio" @click="showMobileMenu = false">画师工作台</router-link>
           <router-link to="/orders" @click="showMobileMenu = false">订单</router-link>
@@ -235,6 +236,7 @@ const showLangDropdown = ref(false)
 const showUserDropdown = ref(false)
 const showMobileMenu = ref(false)
 const spaceArtistUid = ref(0)
+const spaceOwnerRole = ref('') // 当前空间主人的角色（用于控制空间菜单）
 const unreadCount = ref(0)
 const logoFailed = ref(false)
 
@@ -283,6 +285,14 @@ const isArtist = computed(() => {
   const role = currentUser.value?.role?.toUpperCase?.() || currentUser.value?.role
   return role === 'ARTIST' || role === 'artist'
 })
+
+// 当前登录用户的主页 slug（slug 未设置时回退 uid）
+const mySlug = computed(() => {
+  return currentUser.value?.slug || currentUser.value?.uid || ''
+})
+
+// 「我的主页」入口文案（中英双语）
+const myPageLabel = computed(() => (currentLocale.value === 'zh' ? '我的主页' : 'My Page'))
 
 // 获取画师 slug（用于全局状态显示）
 const artistSlug = computed(() => {
@@ -370,7 +380,7 @@ const spaceMenuItems = computed(() => {
   try {
     if (!currentSlug.value) return []
     const slug = encodeURIComponent(currentSlug.value)
-    const items = [
+    const all = [
       { name: 'SpaceHome', path: `/@${slug}/home`, label: '首页' },      // 空间首页（Space.vue 子路由）
       { name: 'SpaceCommission', path: `/@${slug}/commission`, label: '约稿' },
       { name: 'SpaceGallery', path: `/@${slug}/gallery`, label: '作品展示' },
@@ -379,6 +389,12 @@ const spaceMenuItems = computed(() => {
       { name: 'SpaceContact', path: `/@${slug}/contact`, label: '联系' }
       // 注意：订单、消息、日程是【全局私有路由】，不在空间菜单中
     ]
+    
+    // 空间主人不是画师时隐藏「约稿」入口；角色未知时（加载中）先展示
+    const ownerRole = spaceOwnerRole.value?.toUpperCase?.() || ''
+    const items = ownerRole && ownerRole !== 'ARTIST'
+      ? all.filter((item) => item.name !== 'SpaceCommission')
+      : all
     
     // 🔥 普通用户登录后在"联系"旁边显示网站私信入口
     if (isLoggedIn.value && !isSpaceOwner.value) {
@@ -514,9 +530,16 @@ const isActiveRoute = (routeName) => {
   }
 }
 
-// 监听 Space.vue 广播的画师信息
-eventBus.on('space-artist-loaded', ({ uid }) => {
+// 监听 Space.vue 广播的空间用户信息
+eventBus.on('space-artist-loaded', ({ uid, role }) => {
   spaceArtistUid.value = uid || 0
+  spaceOwnerRole.value = role || ''
+})
+
+// 切换空间时重置，避免沿用上一个空间的角色
+watch(currentSlug, () => {
+  spaceArtistUid.value = 0
+  spaceOwnerRole.value = ''
 })
 
 const changeLocale = (locale) => {
@@ -603,10 +626,10 @@ const exitSpace = async () => {
   z-index: 1000;
 }
 
-/* 空间态：轻微不同的背景色 */
+/* 空间态：纯白背景 + 极浅功能边框 */
 .navbar.space-mode {
-  background: linear-gradient(90deg, var(--white) 0%, #f8f9ff 100%);
-  border-bottom: 2px solid var(--primary-color);
+  background: var(--white);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .navbar .container {
@@ -628,20 +651,20 @@ const exitSpace = async () => {
 .btn-exit-space {
   width: 36px;
   height: 36px;
-  background: var(--bg-light);
+  background: var(--secondary-color);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius);
   cursor: pointer;
   font-size: 1.2rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.3s;
+  transition: var(--transition);
 }
 
 .btn-exit-space:hover {
-  background: var(--primary-color);
-  color: white;
+  background: var(--text-dark);
+  color: var(--white);
 }
 
 /* Logo */
@@ -661,7 +684,7 @@ const exitSpace = async () => {
 }
 
 .logo-divider {
-  color: #ccc;
+  color: var(--border-color);
   font-weight: 300;
 }
 
@@ -682,7 +705,7 @@ const exitSpace = async () => {
   gap: 5px;
   margin-left: 20px;
   padding-left: 20px;
-  border-left: 1px solid #e0e0e0;
+  border-left: 1px solid var(--border-color);
 }
 
 .space-menu a {
@@ -691,14 +714,14 @@ const exitSpace = async () => {
   font-size: 0.95rem;
   text-decoration: none;
   padding: 8px 12px;
-  border-radius: 6px;
-  transition: all 0.2s;
+  border-radius: var(--radius);
+  transition: var(--transition);
   white-space: nowrap;
 }
 
 .space-menu a:hover {
-  background: var(--bg-light);
-  color: var(--primary-color);
+  background: var(--secondary-color);
+  color: var(--accent-color);
 }
 
 .space-menu a.active {
@@ -718,13 +741,13 @@ const exitSpace = async () => {
   font-weight: 500;
   text-decoration: none;
   padding: 8px 16px;
-  border-radius: 6px;
-  transition: all 0.2s;
+  border-radius: var(--radius);
+  transition: var(--transition);
 }
 
 .nav-center a:hover {
-  background: var(--bg-light);
-  color: var(--primary-color);
+  background: var(--secondary-color);
+  color: var(--accent-color);
 }
 
 .nav-center a.active {
@@ -745,7 +768,7 @@ const exitSpace = async () => {
   align-items: center;
   gap: 6px;
   padding: 8px 16px;
-  border-radius: 20px;
+  border-radius: var(--radius);
   font-weight: 500;
   font-size: 0.9rem;
   cursor: pointer;
@@ -755,47 +778,43 @@ const exitSpace = async () => {
   white-space: nowrap;
 }
 
-/* 绿色按钮（个性化、登录） */
+/* 主按钮（个性化、登录）：近黑底白字，hover 变蓝 */
 .btn-personalization,
 .btn-login {
-  background: linear-gradient(135deg, #10B981 0%, #34D399 100%);
-  color: white !important;
+  background: var(--primary-color);
+  color: var(--white) !important;
 }
 
 .btn-personalization:hover,
 .btn-login:hover {
-  background: linear-gradient(135deg, #059669 0%, #10B981 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  background: var(--accent-color);
 }
 
 .btn-personalization.active {
-  background: linear-gradient(135deg, #047857 0%, #059669 100%);
+  background: var(--accent-color);
 }
 
-/* 灰色按钮（语言切换） */
+/* 次要按钮（语言切换）：描边样式 */
 .btn-lang {
-  background: linear-gradient(135deg, #6B7280 0%, #9CA3AF 100%);
-  color: white !important;
+  background: var(--white);
+  color: var(--text-dark) !important;
+  border: 1px solid var(--border-color);
 }
 
 .btn-lang:hover {
-  background: linear-gradient(135deg, #4B5563 0%, #6B7280 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(107, 114, 128, 0.3);
+  border-color: var(--accent-color);
+  color: var(--accent-color) !important;
 }
 
 /* 用户按钮 */
 .btn-user {
-  background: linear-gradient(135deg, #10B981 0%, #34D399 100%);
-  color: white;
+  background: var(--primary-color);
+  color: var(--white);
   padding: 6px 14px 6px 6px;
 }
 
 .btn-user:hover {
-  background: linear-gradient(135deg, #059669 0%, #10B981 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  background: var(--accent-color);
 }
 
 .user-avatar {
@@ -843,8 +862,9 @@ const exitSpace = async () => {
   top: calc(100% + 8px);
   right: 0;
   background: var(--white);
-  box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-hover);
+  border-radius: var(--radius);
   padding: 8px 0;
   min-width: 160px;
   z-index: 1001;
@@ -866,14 +886,14 @@ const exitSpace = async () => {
 
 .dropdown-menu a:hover,
 .dropdown-menu button:hover {
-  background: var(--bg-light);
-  color: var(--primary-color);
+  background: var(--secondary-color);
+  color: var(--accent-color);
 }
 
 .dropdown-menu hr {
   margin: 8px 0;
   border: none;
-  border-top: 1px solid var(--bg-light);
+  border-top: 1px solid var(--border-color);
 }
 
 .logout-btn {
@@ -927,7 +947,7 @@ const exitSpace = async () => {
 .mobile-menu button {
   color: var(--text-dark);
   padding: 12px;
-  border-radius: 8px;
+  border-radius: var(--radius);
   text-decoration: none;
   font-size: 1rem;
   text-align: left;
@@ -937,17 +957,17 @@ const exitSpace = async () => {
 }
 
 .mobile-menu a:hover {
-  background: var(--bg-light);
+  background: var(--secondary-color);
 }
 
 .mobile-exit-btn {
   background: var(--primary-color) !important;
-  color: white !important;
+  color: var(--white) !important;
 }
 
 .mobile-personalization {
-  background: linear-gradient(135deg, #10B981 0%, #34D399 100%) !important;
-  color: white !important;
+  background: var(--primary-color) !important;
+  color: var(--white) !important;
   text-align: center !important;
   font-weight: 600;
 }
@@ -961,20 +981,20 @@ const exitSpace = async () => {
 .mobile-lang button {
   flex: 1;
   padding: 10px;
-  border: 2px solid #ddd;
+  border: 1px solid var(--border-color);
   background: var(--white);
-  border-radius: 8px;
+  border-radius: var(--radius);
 }
 
 .mobile-lang button.active {
   border-color: var(--primary-color);
   background: var(--primary-color);
-  color: white;
+  color: var(--white);
 }
 
 .mobile-login {
-  background: linear-gradient(135deg, #10B981 0%, #34D399 100%) !important;
-  color: white !important;
+  background: var(--primary-color) !important;
+  color: var(--white) !important;
   text-align: center !important;
   font-weight: 600;
 }
@@ -1067,7 +1087,7 @@ const exitSpace = async () => {
   overflow: hidden;
   background: var(--text-dark);
   color: var(--white);
-  border-radius: 8px;
+  border-radius: var(--radius);
 }
 
 .brand-mark img {
@@ -1090,17 +1110,17 @@ const exitSpace = async () => {
   place-items: center;
   width: 38px;
   height: 38px;
-  border: 1px solid #E5E5E5;
+  border: 1px solid var(--border-color);
   border-radius: 50%;
   color: var(--text-dark);
-  background: #fff;
+  background: var(--white);
   transition: var(--transition);
 }
 
 .notification-link:hover,
 .notification-link.router-link-active {
-  color: var(--primary-color);
-  border-color: var(--primary-color);
+  color: var(--accent-color);
+  border-color: var(--accent-color);
 }
 
 .notification-badge {

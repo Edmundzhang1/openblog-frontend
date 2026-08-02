@@ -1,7 +1,9 @@
 <template>
   <div class="home">
+    <!-- 按 sectionOrder 编排的主页模块 -->
+    <template v-for="sectionKey in orderedHomeSections" :key="sectionKey">
     <!-- 轮播图 -->
-    <section class="hero-section fade-in">
+    <section v-if="sectionKey === 'hero' && isModuleVisible('hero')" class="hero-section fade-in">
       <div class="container">
         <div class="carousel-container" @mouseenter="stopAutoplay" @mouseleave="startAutoplay">
           <div class="carousel" :style="{ transform: `translateX(-${currentSlide * 100}%)` }">
@@ -11,7 +13,7 @@
                 <h2>{{ slide.title }}</h2>
                 <p>{{ slide.desc }}</p>
                 <div class="carousel-actions">
-                  <router-link :to="`/@${currentSlug}/commission`" class="btn btn-primary">{{ content.ctaCommission }}</router-link>
+                  <router-link v-if="isModuleVisible('commission')" :to="`/@${currentSlug}/commission`" class="btn btn-primary">{{ content.ctaCommission }}</router-link>
                   <router-link :to="`/@${currentSlug}/gallery`" class="btn btn-secondary">{{ content.ctaGallery }}</router-link>
                 </div>
               </div>
@@ -33,15 +35,15 @@
     </section>
 
     <!-- 排单与日历 -->
-    <section class="schedule-section">
+    <section v-if="sectionKey === 'calendar' && (isModuleVisible('calendar') || isModuleVisible('commission'))" class="schedule-section">
       <div class="container">
         <div class="section-title">
           <h2>{{ content.scheduleTitle }}</h2>
           <p>{{ content.scheduleDesc }}</p>
         </div>
-        <div class="schedule-container">
+        <div class="schedule-container" :class="{ 'schedule-single': !isModuleVisible('calendar') || !isModuleVisible('commission') }">
           <!-- 日历 -->
-          <div class="calendar">
+          <div v-if="isModuleVisible('calendar')" class="calendar">
             <div class="calendar-header">
               <h3>{{ calendarTitle }}</h3>
               <div class="calendar-nav">
@@ -86,7 +88,7 @@
           </div>
           
           <!-- 排单卡片 -->
-          <div class="schedule-cards-container">
+          <div v-if="isModuleVisible('commission')" class="schedule-cards-container">
             <div class="schedule-card-wrapper">
               <transition name="card-fade" mode="out-in">
                 <!-- 卡片1：当前排单情况 -->
@@ -159,6 +161,88 @@
       </div>
     </section>
 
+    <!-- 画风展示 -->
+    <section v-if="sectionKey === 'gallery' && isModuleVisible('gallery')" class="gallery-section">
+      <div class="container">
+        <div class="section-title">
+          <h2>{{ content.galleryTitle }}</h2>
+          <p>{{ content.galleryDesc }}</p>
+        </div>
+        <!-- 置顶作品 -->
+        <div v-if="pinnedWork" class="pinned-work-card" @click="openLightbox(pinnedWork.image)">
+          <span class="pinned-badge">{{ content.pinnedBadge }}</span>
+          <img :src="pinnedWork.image" :alt="pinnedWork.title" @error="handleImageError">
+          <div class="pinned-work-info">
+            <h4>{{ pinnedWork.title }}</h4>
+            <p>{{ pinnedWork.desc }}</p>
+          </div>
+        </div>
+        <div class="style-tabs">
+          <button
+            v-for="tab in styleTabs"
+            :key="tab.key"
+            class="style-tab"
+            :class="{ active: activeStyle === tab.key }"
+            @click="activeStyle = tab.key"
+          >
+            {{ tab.label }}
+          </button>
+        </div>
+        <div class="masonry-grid">
+          <div
+            v-for="item in filteredGallery"
+            :key="item.id"
+            class="masonry-item"
+            @click="openLightbox(item.image)"
+          >
+            <img :src="item.image" :alt="item.title">
+            <div class="masonry-item-overlay">
+              <h4>{{ item.title }}</h4>
+              <p>{{ item.desc }}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 动态 -->
+    <section v-if="sectionKey === 'moments' && isModuleVisible('moments')" class="moments-section">
+      <div class="container">
+        <div class="section-title">
+          <h2>{{ content.momentsTitle }}</h2>
+          <p>{{ content.momentsDesc }}</p>
+        </div>
+        <div class="home-moments-list">
+          <div v-if="pinnedMoment" class="home-moment-card is-pinned">
+            <span class="pinned-badge">{{ content.pinnedBadge }}</span>
+            <h4 v-if="pinnedMoment.title">{{ pinnedMoment.title }}</h4>
+            <p>{{ pinnedMoment.content }}</p>
+            <div v-if="pinnedMoment.images && pinnedMoment.images.length" class="home-moment-images">
+              <img v-for="(img, idx) in pinnedMoment.images.slice(0, 3)" :key="idx" :src="img" @error="handleImageError">
+            </div>
+          </div>
+          <div v-for="moment in recentMoments" :key="moment.id" class="home-moment-card">
+            <h4 v-if="moment.title">{{ moment.title }}</h4>
+            <p>{{ moment.content }}</p>
+          </div>
+          <p v-if="!pinnedMoment && recentMoments.length === 0" class="home-moments-empty">{{ content.momentsEmpty }}</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 自定义板块 -->
+    <template v-if="sectionKey === 'custom'">
+      <section v-for="cs in enabledCustomSections" :key="cs.id" class="custom-section-block">
+        <div class="container">
+          <div class="custom-section-card">
+            <h2 v-if="cs.title" class="custom-section-title">{{ cs.title }}</h2>
+            <div class="custom-section-content" v-html="sanitizeHTML(cs.content)"></div>
+          </div>
+        </div>
+      </section>
+    </template>
+    </template>
+
     <!-- 排单详情弹窗（只读） -->
     <div class="todo-modal commission-modal" :class="{ active: showTodoModal }" @click.self="closeTodoModal">
       <div class="todo-modal-content">
@@ -214,43 +298,8 @@
       </div>
     </div>
 
-    <!-- 画风展示 -->
-    <section class="gallery-section">
-      <div class="container">
-        <div class="section-title">
-          <h2>{{ content.galleryTitle }}</h2>
-          <p>{{ content.galleryDesc }}</p>
-        </div>
-        <div class="style-tabs">
-          <button 
-            v-for="tab in styleTabs" 
-            :key="tab.key"
-            class="style-tab"
-            :class="{ active: activeStyle === tab.key }"
-            @click="activeStyle = tab.key"
-          >
-            {{ tab.label }}
-          </button>
-        </div>
-        <div class="masonry-grid">
-          <div 
-            v-for="item in filteredGallery" 
-            :key="item.id"
-            class="masonry-item"
-            @click="openLightbox(item.image)"
-          >
-            <img :src="item.image" :alt="item.title">
-            <div class="masonry-item-overlay">
-              <h4>{{ item.title }}</h4>
-              <p>{{ item.desc }}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- 快速导航 -->
-    <section class="quick-nav-section">
+    <!-- 快速导航（about/contact/commission 入口显隐由 modules 配置控制） -->
+    <section v-if="quickNavs.length > 0" class="quick-nav-section">
       <div class="container">
         <div class="section-title">
           <h2>{{ content.quickNavTitle }}</h2>
@@ -280,13 +329,13 @@
 </template>
 
 <script>
-import { inject, ref, onMounted, onBeforeUnmount } from 'vue'
+import { inject, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { Calendar } from '../../utils/calendar'
 import { eventBus, showToast } from '../../utils/eventBus'
-import { getPersonalization, applyTheme, applyBackground, exitPreviewMode, isPreviewModeActive } from '../../utils/personalization.js'
+import { getPersonalization, applyTheme, applyBackground, exitPreviewMode, isPreviewModeActive, sanitizeHTML, sanitizeCSS, clearViewingPersonalization } from '../../utils/personalization.js'
 import { getPublicSchedulesAPI } from '@/api/calendar.js'
 import { getPublicArtStylesAPI, getPublicWorkloadAPI, getPublicMonthNotesAPI } from '@/api/todo.js'
-import { getPublicWorksAPI } from '@/api/artist.js'
+import { getPublicWorksAPI, getPublicMomentsAPI } from '@/api/artist.js'
 import { getPublicAvailableDatesAPI, getMyAvailableDatesAPI } from '@/api/availableDate.js'
 import { HOME_IMAGES, IMAGES } from '../../config/assets.js'
 
@@ -301,6 +350,10 @@ const HOME_CONTENT = {
     addTodo: '添加',
     galleryTitle: '画风展示',
     galleryDesc: '点击标签查看不同风格的示例作品',
+    momentsTitle: '最新动态',
+    momentsDesc: '画师的近况与公告',
+    momentsEmpty: '暂无动态',
+    pinnedBadge: '📌 置顶',
     quickNavTitle: '快速导航',
     quickNavDesc: '了解更多关于我们的信息',
     imageFallbackText: '图片加载失败',
@@ -370,6 +423,10 @@ const HOME_CONTENT = {
     addTodo: 'Add',
     galleryTitle: 'Style Gallery',
     galleryDesc: 'Switch tabs to browse sample works in different styles',
+    momentsTitle: 'Latest Moments',
+    momentsDesc: 'Updates and announcements from the artist',
+    momentsEmpty: 'No moments yet',
+    pinnedBadge: '📌 Pinned',
     quickNavTitle: 'Quick Links',
     quickNavDesc: 'Learn more about the studio and commission process',
     imageFallbackText: 'Image Load Failed',
@@ -449,18 +506,52 @@ export default {
     const handlePreviewModeChange = (e) => {
       previewMode.value = Boolean(e.detail?.active)
     }
-    
+
+    // ========== 自定义 CSS（仅作用于本主页） ==========
+    const CUSTOM_STYLE_SELECTOR = 'style[data-space-custom]'
+
+    const removeCustomCSS = () => {
+      if (typeof document === 'undefined') return
+      const tag = document.head.querySelector(CUSTOM_STYLE_SELECTOR)
+      if (tag) tag.remove()
+    }
+
+    const applyCustomCSS = (css) => {
+      if (typeof document === 'undefined') return
+      const clean = sanitizeCSS(css || '')
+      if (!clean) {
+        removeCustomCSS()
+        return
+      }
+      let tag = document.head.querySelector(CUSTOM_STYLE_SELECTOR)
+      if (!tag) {
+        tag = document.createElement('style')
+        tag.setAttribute('data-space-custom', '')
+        document.head.appendChild(tag)
+      }
+      tag.textContent = clean
+    }
+
+    watch(
+      () => personalization.value && personalization.value.customCSS,
+      (css) => applyCustomCSS(css)
+    )
+
     onMounted(() => {
       window.addEventListener('personalization-changed', handlePersonalizationChange)
       window.addEventListener('personalization-preview-changed', handlePreviewModeChange)
+      applyCustomCSS(personalization.value && personalization.value.customCSS)
     })
-    
+
     onBeforeUnmount(() => {
       window.removeEventListener('personalization-changed', handlePersonalizationChange)
       window.removeEventListener('personalization-preview-changed', handlePreviewModeChange)
+      removeCustomCSS()
+      // 离开空间页时还原访客查看配置，避免污染其他页面
+      clearViewingPersonalization()
     })
-    
-    return { i18n, artistInfo, personalization, previewMode }
+
+    return { i18n, artistInfo, personalization, previewMode, sanitizeHTML }
   },
   data() {
     return {
@@ -485,6 +576,9 @@ export default {
       
       // 🔥 新增：从后端 API 获取的数据
       apiWorks: [],
+
+      // 空间公开动态（用于动态区与置顶动态）
+      spaceMoments: [],
       
       // 🔥 新增：卡片公告配置（从后端读取）
       cardConfig: {
@@ -562,11 +656,76 @@ export default {
       return []
     },
     quickNavs() {
-      // 🔥 为导航链接添加当前 slug
-      return this.content.quickNavs.map(nav => ({
-        ...nav,
-        path: `/@${this.currentSlug}${nav.path}`
-      }))
+      // 🔥 为导航链接添加当前 slug，并按模块显隐配置过滤入口
+      const navs = this.content.quickNavs
+        .filter(nav => {
+          if (nav.path === '/about') return this.isModuleVisible('about')
+          if (nav.path === '/contact') return this.isModuleVisible('contact')
+          if (nav.path === '/commission') return this.isModuleVisible('commission')
+          return true
+        })
+      // about/contact/commission 在 sectionOrder 中没有独立区块，仅作为 quick-nav 卡片存在；
+      // 这里按它们在 sectionOrder 中的相对顺序排列卡片，让排序设置产生视觉效果（未配置的键保持原相对顺序）
+      const order = (this.personalization && Array.isArray(this.personalization.sectionOrder))
+        ? this.personalization.sectionOrder
+        : []
+      const rank = (path) => {
+        const idx = order.indexOf(path.replace(/^\//, ''))
+        return idx === -1 ? order.length : idx
+      }
+      return navs
+        .map((nav, index) => ({ nav, index }))
+        .sort((a, b) => (rank(a.nav.path) - rank(b.nav.path)) || (a.index - b.index))
+        .map(({ nav }) => ({
+          ...nav,
+          path: `/@${this.currentSlug}${nav.path}`
+        }))
+    },
+    // ========== 主页 DIY：模块显隐 / 排序 / 置顶 / 自定义板块 ==========
+    modulesConfig() {
+      return (this.personalization && this.personalization.modules) || {}
+    },
+    orderedHomeSections() {
+      const KNOWN = ['hero', 'gallery', 'calendar', 'moments', 'about', 'contact', 'custom']
+      const order = (this.personalization && Array.isArray(this.personalization.sectionOrder))
+        ? this.personalization.sectionOrder
+        : []
+      const result = []
+      order.forEach(key => {
+        if (KNOWN.includes(key) && !result.includes(key)) result.push(key)
+      })
+      // 补齐配置中缺失的模块，保证新模块默认可见
+      KNOWN.forEach(key => {
+        if (!result.includes(key)) result.push(key)
+      })
+      return result
+    },
+    enabledCustomSections() {
+      const sections = (this.personalization && this.personalization.customSections) || []
+      return sections.filter(section => section && section.enabled !== false)
+    },
+    pinnedWork() {
+      const workId = this.personalization && this.personalization.pinned && this.personalization.pinned.workId
+      if (workId === null || workId === undefined || workId === '') return null
+      const match = item => String(item.id) === String(workId)
+      const fromGallery = this.galleryItems.find(match)
+      if (fromGallery) return fromGallery
+      // 兜底：从空间配置的作品列表中查找
+      const configWorks = (this.personalization && this.personalization.gallery && this.personalization.gallery.works) || []
+      const found = configWorks.find(match)
+      return found || null
+    },
+    pinnedMoment() {
+      const momentId = this.personalization && this.personalization.pinned && this.personalization.pinned.momentId
+      if (momentId === null || momentId === undefined || momentId === '') return null
+      return this.spaceMoments.find(moment => String(moment.id) === String(momentId)) || null
+    },
+    recentMoments() {
+      // 置顶动态单独展示，列表中去重，最多显示 3 条
+      const pinned = this.pinnedMoment
+      return this.spaceMoments
+        .filter(moment => !pinned || String(moment.id) !== String(pinned.id))
+        .slice(0, 3)
     },
     filteredGallery() {
       if (this.activeStyle === 'all') return this.galleryItems
@@ -768,12 +927,30 @@ export default {
     this.updateCalendar()
     this.startAutoplay()
     this.loadCommissions()
+    this.loadSpaceMoments() // 加载空间公开动态（动态区 + 置顶）
     await this.loadTodoData() // 🔥 加载 TodoList 数据
   },
   beforeUnmount() {
     this.stopAutoplay()
   },
   methods: {
+    // 模块显隐：未配置时默认显示
+    isModuleVisible(key) {
+      return this.modulesConfig[key] !== false
+    },
+    // 加载空间公开动态
+    async loadSpaceMoments() {
+      try {
+        const slug = this.currentSlug
+        if (!slug) return
+        const res = await getPublicMomentsAPI(slug)
+        const list = res.data && (res.data.list || res.data)
+        this.spaceMoments = Array.isArray(list) ? list : []
+      } catch (err) {
+        console.warn('[Home] 加载动态失败:', err)
+        this.spaceMoments = []
+      }
+    },
     startAutoplay() {
       this.stopAutoplay()
       this.autoplayTimer = setInterval(() => this.nextSlide(), 5000)
@@ -1118,7 +1295,7 @@ export default {
 <style scoped>
 /* 轮播图 */
 .hero-section {
-  padding: 40px 0;
+  padding: 64px 0;
 }
 
 .carousel-container {
@@ -1127,7 +1304,7 @@ export default {
   margin: 0 auto;
   border-radius: var(--radius);
   overflow: hidden;
-  box-shadow: var(--shadow-hover);
+  box-shadow: var(--shadow);
 }
 
 .carousel {
@@ -1179,9 +1356,9 @@ export default {
   transform: translateY(-50%);
   background: rgba(255,255,255,0.9);
   border: none;
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius);
   cursor: pointer;
   font-size: 1.2rem;
   transition: var(--transition);
@@ -1192,7 +1369,6 @@ export default {
 
 .carousel-btn:hover {
   background: var(--white);
-  transform: translateY(-50%) scale(1.1);
 }
 
 .carousel-btn.prev { left: 20px; }
@@ -1218,13 +1394,11 @@ export default {
 
 .carousel-dot.active {
   background: var(--white);
-  width: 30px;
-  border-radius: 5px;
 }
 
 /* 排单区域 */
 .schedule-section {
-  padding: 60px 0;
+  padding: 64px 0;
   background: var(--white);
 }
 
@@ -1255,6 +1429,12 @@ export default {
   .schedule-container {
     grid-template-columns: 1fr;
   }
+}
+
+/* 日历/排单只开一个模块时单列居中 */
+.schedule-container.schedule-single {
+  grid-template-columns: 1fr;
+  max-width: 640px;
 }
 
 /* 日历 */
@@ -1415,7 +1595,7 @@ export default {
 .todo-input input {
   flex: 1;
   padding: 10px 15px;
-  border: 1px solid #ddd;
+  border: 1px solid #E5E7EB;
   border-radius: var(--radius-sm);
   font-size: 1rem;
 }
@@ -1458,7 +1638,7 @@ export default {
 .delete-todo {
   background: none;
   border: none;
-  color: #e74c3c;
+  color: #DC2626;
   cursor: pointer;
   opacity: 0;
   transition: var(--transition);
@@ -1483,7 +1663,7 @@ export default {
 }
 
 .note-star {
-  color: #e74c3c;
+  color: #DC2626;
   font-weight: bold;
   margin-right: 2px;
   font-size: 1.1em;
@@ -1492,22 +1672,22 @@ export default {
 
 /* 每日备注显示 */
 .daily-note-display {
-  background: linear-gradient(135deg, #fff9e6 0%, #fff3cd 100%);
+  background: #FAFAFA;
   border-radius: var(--radius-sm);
   padding: 15px;
   margin-bottom: 20px;
-  border-left: 4px solid #f0ad4e;
+  border-left: 4px solid #E5E7EB;
 }
 
 .daily-note-label {
   font-size: 0.85rem;
-  color: #856404;
+  color: var(--text-dark);
   font-weight: 600;
   margin-bottom: 8px;
 }
 
 .daily-note-content {
-  color: #533f03;
+  color: var(--text-light);
   font-size: 0.95rem;
   line-height: 1.5;
   white-space: pre-wrap;
@@ -1552,7 +1732,7 @@ export default {
   align-items: center;
   gap: 6px;
   padding: 4px 10px;
-  border-radius: 12px;
+  border-radius: var(--radius);
   font-size: 0.85rem;
   font-weight: 500;
 }
@@ -1565,18 +1745,18 @@ export default {
 
 .status-badge {
   padding: 2px 8px;
-  border-radius: 10px;
+  border-radius: var(--radius);
   font-size: 0.75rem;
 }
 
 .status-badge.completed {
-  background: #e8f5e9;
-  color: #388e3c;
+  background: rgba(34, 197, 94, 0.1);
+  color: #15803D;
 }
 
 .status-badge.pending {
-  background: #fff3e0;
-  color: #f57c00;
+  background: rgba(245, 158, 11, 0.12);
+  color: #B45309;
 }
 
 .commission-client {
@@ -1597,13 +1777,13 @@ export default {
   font-size: 0.85rem;
   color: var(--text-light);
   padding-top: 8px;
-  border-top: 1px dashed #ddd;
+  border-top: 1px dashed #E5E7EB;
 }
 
 .modal-footer-hint {
   margin-top: 20px;
   padding-top: 20px;
-  border-top: 1px solid #eee;
+  border-top: 1px solid #E5E7EB;
 }
 
 .btn-full {
@@ -1613,15 +1793,15 @@ export default {
 
 /* 日历工作量状态样式 */
 .calendar-day.status-free {
-  background: #F0FFF0;
+  background: rgba(34, 197, 94, 0.08);
 }
 
 .calendar-day.status-busy {
-  background: #FFFACD;
+  background: rgba(245, 158, 11, 0.1);
 }
 
 .calendar-day.status-overload {
-  background: #FFE4E1;
+  background: rgba(239, 68, 68, 0.08);
 }
 
 .calendar-day .day-number {
@@ -1675,13 +1855,13 @@ export default {
 
 /* 🔥 可预约日期样式 */
 .calendar-day.available-date {
-  background: rgba(82, 196, 26, 0.15);
-  border: 2px solid #52c41a;
+  background: rgba(34, 197, 94, 0.08);
+  border: 1px solid rgba(34, 197, 94, 0.45);
 }
 
 .calendar-day.available-date-full {
-  background: rgba(150, 150, 150, 0.15);
-  border: 2px solid #999;
+  background: rgba(156, 163, 175, 0.12);
+  border: 1px solid #D1D5DB;
 }
 
 .calendar-day .available-marker {
@@ -1693,7 +1873,7 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #52c41a;
+  background: #22C55E;
   color: white;
   font-size: 0.55rem;
   font-weight: bold;
@@ -1702,7 +1882,7 @@ export default {
 }
 
 .calendar-day .available-marker.is-full {
-  background: #999;
+  background: var(--text-muted);
 }
 
 /* 排单卡片 */
@@ -1716,7 +1896,7 @@ export default {
 }
 
 .schedule-card {
-  background: linear-gradient(135deg, var(--secondary-color) 0%, var(--white) 100%);
+  background: var(--secondary-color);
   border-radius: var(--radius);
   padding: 25px;
   box-shadow: var(--shadow);
@@ -1747,24 +1927,24 @@ export default {
 
 .status {
   padding: 5px 12px;
-  border-radius: 20px;
+  border-radius: var(--radius);
   font-size: 0.8rem;
   font-weight: 600;
 }
 
 .status.open {
-  background: #d4edda;
-  color: #155724;
+  background: rgba(34, 197, 94, 0.12);
+  color: #15803D;
 }
 
 .status.busy {
-  background: #fff3cd;
-  color: #856404;
+  background: rgba(245, 158, 11, 0.12);
+  color: #B45309;
 }
 
 .status.closed {
-  background: #f8d7da;
-  color: #721c24;
+  background: rgba(239, 68, 68, 0.1);
+  color: #DC2626;
 }
 
 .schedule-card h4 {
@@ -1791,7 +1971,7 @@ export default {
   align-items: center;
   gap: 10px;
   padding: 8px 0;
-  border-bottom: 1px solid rgba(0,0,0,0.05);
+  border-bottom: 1px solid #E5E7EB;
 }
 
 .client-item:last-child {
@@ -1803,7 +1983,7 @@ export default {
   height: 22px;
   background: var(--primary-color);
   color: white;
-  border-radius: 50%;
+  border-radius: var(--radius);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1819,9 +1999,9 @@ export default {
 .client-style {
   font-size: 0.8rem;
   color: var(--text-muted);
-  background: rgba(107, 142, 107, 0.1);
+  background: #F3F4F6;
   padding: 2px 8px;
-  border-radius: 10px;
+  border-radius: var(--radius);
 }
 
 /* 日期标签样式 */
@@ -1839,7 +2019,7 @@ export default {
   background: var(--primary-color);
   color: white;
   padding: 4px 10px;
-  border-radius: 12px;
+  border-radius: var(--radius);
   font-size: 0.85rem;
 }
 
@@ -1856,7 +2036,7 @@ export default {
 .date-range {
   margin-top: 15px;
   padding-top: 15px;
-  border-top: 1px solid rgba(0,0,0,0.1);
+  border-top: 1px solid #E5E7EB;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1873,10 +2053,10 @@ export default {
 
 .schedule-card-nav button {
   background: var(--white);
-  border: 1px solid #ddd;
+  border: 1px solid #E5E7EB;
   width: 36px;
   height: 36px;
-  border-radius: 50%;
+  border-radius: var(--radius);
   cursor: pointer;
   transition: var(--transition);
 }
@@ -1903,7 +2083,7 @@ export default {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #ddd;
+  background: #D1D5DB;
   cursor: pointer;
   transition: var(--transition);
 }
@@ -1914,7 +2094,7 @@ export default {
 
 /* 画风展示 */
 .gallery-section {
-  padding: 60px 0;
+  padding: 64px 0;
 }
 
 .style-tabs {
@@ -1926,10 +2106,10 @@ export default {
 }
 
 .style-tab {
-  padding: 12px 30px;
+  padding: 10px 20px;
   background: var(--white);
-  border: 2px solid transparent;
-  border-radius: 30px;
+  border: 1px solid #E5E7EB;
+  border-radius: var(--radius);
   cursor: pointer;
   font-weight: 600;
   transition: var(--transition);
@@ -1975,11 +2155,6 @@ export default {
 .masonry-item img {
   width: 100%;
   display: block;
-  transition: var(--transition);
-}
-
-.masonry-item:hover img {
-  transform: scale(1.05);
 }
 
 .masonry-item-overlay {
@@ -2008,9 +2183,154 @@ export default {
   opacity: 0.8;
 }
 
+/* 置顶标记 */
+.pinned-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-color);
+  color: var(--white);
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+/* 置顶作品 */
+.pinned-work-card {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  max-width: 1000px;
+  margin: 0 auto 30px;
+  padding: 16px;
+  background: var(--white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.pinned-work-card:hover {
+  box-shadow: var(--shadow-hover);
+}
+
+.pinned-work-card img {
+  width: 120px;
+  height: 120px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.pinned-work-info h4 {
+  margin: 8px 0 6px;
+  color: var(--text-dark);
+}
+
+.pinned-work-info p {
+  margin: 0;
+  color: var(--text-light);
+  font-size: 0.9rem;
+}
+
+/* 动态 */
+.moments-section {
+  padding: 64px 0;
+  background: var(--white);
+}
+
+.home-moments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.home-moment-card {
+  padding: 20px;
+  background: var(--bg-light);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.home-moment-card.is-pinned {
+  border: 1px solid var(--accent-color);
+}
+
+.home-moment-card h4 {
+  margin: 8px 0 6px;
+  color: var(--text-dark);
+}
+
+.home-moment-card p {
+  margin: 0;
+  color: var(--text-light);
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.home-moment-images {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.home-moment-images img {
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+}
+
+.home-moments-empty {
+  text-align: center;
+  color: var(--text-muted);
+}
+
+/* 自定义板块 */
+.custom-section-block {
+  padding: 64px 0;
+}
+
+.custom-section-card {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 32px;
+  background: var(--white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.custom-section-title {
+  margin: 0 0 16px;
+  font-family: var(--font-heading);
+  color: var(--text-dark);
+}
+
+.custom-section-content {
+  color: var(--text-dark);
+  line-height: 1.8;
+}
+
+.custom-section-content :deep(img) {
+  max-width: 100%;
+  border-radius: var(--radius-sm);
+}
+
+.custom-section-content :deep(a) {
+  color: var(--accent-color);
+}
+
+.custom-section-content :deep(blockquote) {
+  margin: 12px 0;
+  padding: 8px 16px;
+  border-left: 4px solid var(--border-color);
+  color: var(--text-light);
+}
+
 /* 快速导航 */
 .quick-nav-section {
-  padding: 60px 0;
+  padding: 64px 0;
   background: var(--white);
 }
 
@@ -2035,11 +2355,11 @@ export default {
   align-items: center;
   gap: 14px;
   padding: 12px 14px;
-  border-radius: 999px;
-  background: linear-gradient(135deg, rgba(17, 24, 39, 0.94), rgba(31, 41, 55, 0.92));
+  border-radius: var(--radius);
+  background: rgba(17, 24, 39, 0.94);
   color: #fff;
   border: 1px solid rgba(255, 255, 255, 0.16);
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.24);
+  box-shadow: var(--shadow-hover);
   backdrop-filter: blur(12px);
 }
 
@@ -2067,6 +2387,13 @@ export default {
 }
 
 @media (max-width: 768px) {
+  .hero-section,
+  .schedule-section,
+  .gallery-section,
+  .quick-nav-section {
+    padding: 40px 0;
+  }
+
   .quick-nav-grid {
     grid-template-columns: 1fr;
   }
@@ -2081,7 +2408,7 @@ export default {
   .preview-home-panel {
     width: 100%;
     justify-content: space-between;
-    border-radius: 20px;
+    border-radius: var(--radius);
   }
 
   .preview-home-btn {
@@ -2102,15 +2429,14 @@ export default {
 }
 
 .quick-nav-card:hover {
-  transform: translateY(-5px);
   box-shadow: var(--shadow-hover);
 }
 
 .quick-nav-icon {
-  width: 70px;
-  height: 70px;
+  width: 64px;
+  height: 64px;
   background: var(--primary-color);
-  border-radius: 50%;
+  border-radius: var(--radius);
   display: flex;
   align-items: center;
   justify-content: center;

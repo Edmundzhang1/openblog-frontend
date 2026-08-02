@@ -23,6 +23,15 @@ export function getApiUrl(path) {
   return `${BASE_URL}${path}`
 }
 
+// 静态资源地址生成（上传文件、头像等，不添加 API 版本前缀）
+export function getAssetUrl(path) {
+  if (!path) return ''
+  if (/^(https?:)?\/\//.test(path) || path.startsWith('data:') || path.startsWith('blob:')) {
+    return path
+  }
+  return `${BASE_URL}${path.startsWith('/') ? path : `/${path}`}`
+}
+
 // ============================================
 // API 端点列表 (根据产品文档 V1)
 // ============================================
@@ -39,6 +48,9 @@ export const API_ENDPOINTS = {
   
   // POST - 验证码登录/注册一体
   AUTH_LOGIN_REGISTER: '/auth/register-or-login',
+
+  // POST - 邮箱密码登录
+  AUTH_PASSWORD_LOGIN: '/auth/login/password',
   
   // POST - 绑定QQ号
   AUTH_BIND_QQ: '/auth/bind-qq',
@@ -55,9 +67,39 @@ export const API_ENDPOINTS = {
   
   // PUT - 更新用户信息
   ME_UPDATE: '/me',
+
+  // GET - 画师工作台主页资料（读走 /me；基本字段 PUT 走 ME_UPDATE）
+  ME_ARTIST_PROFILE: '/me',
+
+  // PUT - 画师主页资料（ARTIST/ADMIN）
+  // Body 可含 artist_tags / price_range_min（分）/ price_range_max（分）/ commission_rules / commission_open，只更新传入字段
+  ME_ARTIST_PROFILE_UPDATE: '/me/artist-profile',
+
+  // POST - 设置/修改密码（Body: { password }，后端不校验旧密码）
+  ME_PASSWORD: '/me/password',
+
+  // DELETE - 注销（软删除）当前账号，无请求体
+  ME_DELETE: '/me',
   
   // GET - 我的委托列表
   MY_ORDERS: '/me/orders',
+
+  // ---------------- 用户主页（空间）相关 ----------------
+  // GET - 任意用户的主页信息（公开，slug 默认=uid）
+  SPACE_INFO: (slug) => `/space/${slug}`,
+
+  // GET - 用户主页 DIY 配置（公开，JSON 对象，可能为 {}）
+  SPACE_PAGE_CONFIG: (slug) => `/space/${slug}/page-config`,
+
+  // ---------------- 画师名录相关 ----------------
+  // GET - 画师列表（公开，分页 page/page_size）
+  ARTISTS: '/artists',
+
+  // GET - 画师详情（公开）
+  ARTIST_DETAIL: (uid) => `/artists/${uid}`,
+
+  // POST - 提交委托（登录用户）
+  COMMISSIONS: '/commissions',
   
   // ---------------- 订单相关 ----------------
   // GET - 订单详情（游客和注册用户均可通过订单号查询）
@@ -68,8 +110,15 @@ export const API_ENDPOINTS = {
   ORDER_UPDATE_STATUS: (id) => `/orders/${id}/status`,
   
   // PATCH - 更新支付记录
-  // Body: { mode, paid_amount, unpaid_amount, status, notes? }
+  // Body: { pay_amount, payment_method?, transaction_id? }
   ORDER_UPDATE_PAYMENT: (id) => `/orders/${id}/payment`,
+
+  // GET/POST - 订单交付物
+  ORDER_DELIVERABLES: (id) => `/orders/${id}/deliverables`,
+
+  // PATCH - 交付物确认/驳回
+  // Body: { status }
+  DELIVERABLE_STATUS: (id) => `/deliverables/${id}/status`,
   
   // ---------------- 聊天相关 ----------------
   // GET - 获取会话列表
@@ -79,20 +128,28 @@ export const API_ENDPOINTS = {
   // Body: { order_id?, participant_id }
   CHAT_CREATE_THREAD: '/chat/threads',
   
-  // GET - 获取会话消息
-  CHAT_MESSAGES: (threadId) => `/chat/threads/${threadId}/messages`,
+  // GET - 获取会话消息（按 thread_id 查询参数过滤）
+  CHAT_MESSAGES: '/chat/messages',
   
   // POST - 发送消息
-  // Body: { content, type, attachments? }
-  CHAT_SEND_MESSAGE: (threadId) => `/chat/threads/${threadId}/messages`,
+  // Body: { thread_id, content, type, attachments? }
+  CHAT_SEND_MESSAGE: '/chat/messages',
+
+  // POST - 标记会话已读
+  CHAT_READ: '/chat/read',
   
   // WebSocket 连接地址
   WS_URL: '/ws',
+  WS: '/ws',
   
+  // ---------------- 上传相关 ----------------
+  // POST - 上传文件（FormData，字段名 file）
+  UPLOAD: '/upload',
+
   // ---------------- 站点配置相关 ----------------
   // GET - 读取站点首页配置（公开）
   // Response: { site_name, logo, banner_images, theme_color, sections, social_links, commission_types }
-  SITE_HOME: (slug) => `/site/${slug}/home`,
+  SITE_HOME: '/site/home',
   
   // GET - 获取当前站点配置
   SITE_CONFIG: '/site/config',
@@ -135,18 +192,43 @@ export const API_ENDPOINTS = {
   
   // ---------------- 通知相关 ----------------
   // GET - 获取通知列表
-  NOTIFICATIONS: '/notifications',
+  NOTIFICATIONS: '/me/notifications',
+
+  // GET - 未读通知数
+  NOTIFICATIONS_UNREAD: '/me/notifications/unread-count',
   
-  // PUT - 标记通知已读
-  NOTIFICATION_READ: (id) => `/notifications/${id}/read`,
+  // PATCH - 标记通知已读
+  NOTIFICATION_READ: (id) => `/me/notifications/${id}/read`,
   
-  // PUT - 标记所有已读
-  NOTIFICATION_READ_ALL: '/notifications/read-all',
+  // PATCH - 标记所有已读
+  NOTIFICATION_READ_ALL: '/me/notifications/read-all',
   
   // ---------------- 管理后台接口 ----------------
-  // 用户管理
+  // 平台总览指标
+  ADMIN_STATS: '/admin/stats',
+
+  // 站点配置（管理员视角，GET/PATCH）
+  ADMIN_SITE_CONFIG: '/admin/site-config',
+
+  // 用户管理（GET 分页+搜索 keyword）
   ADMIN_USERS: '/admin/users',
   ADMIN_USER: (id) => `/admin/users/${id}`,
+
+  // PATCH - 修改用户角色
+  // Body: { role }
+  ADMIN_USER_ROLE: (uid) => `/admin/users/${uid}/role`,
+
+  // PATCH - 修改用户主页路径 slug
+  // Body: { slug }，格式 ^[a-z0-9_-]{2,50}$
+  ADMIN_USER_SLUG: (uid) => `/admin/users/${uid}/slug`,
+
+  // 黑名单管理
+  ADMIN_BLACKLIST: '/admin/blacklist',
+  ADMIN_BLACKLIST_ITEM: (id) => `/admin/blacklist/${id}`,
+
+  // 画师入驻审批
+  ADMIN_ARTIST_APPLICATIONS: '/admin/artist-applications',
+  ADMIN_ARTIST_APPLICATION: (uid) => `/admin/artist-applications/${uid}`,
   
   // 订单管理
   ADMIN_ORDERS: '/admin/orders',

@@ -54,7 +54,7 @@
                   <span class="order-status" :class="order.status">{{ order.statusText }}</span>
                 </div>
               </div>
-              <router-link :to="`/orders?id=${order.id}`" class="btn-view">查看详情</router-link>
+              <router-link :to="`/orders?order=${order.order_no || order.id}`" class="btn-view">查看详情</router-link>
             </div>
           </div>
         </section>
@@ -89,7 +89,7 @@
           <div class="empty-icon">🎨</div>
           <h3>还没有进行中的委托</h3>
           <p>去发现心仪的画师，开始你的第一次约稿吧！</p>
-          <button class="btn-primary" @click="browseArtists">浏览画师</button>
+          <button class="btn btn-primary" @click="browseArtists">浏览画师</button>
         </section>
       </div>
     </main>
@@ -131,10 +131,9 @@ export default {
       }
     }
     
-    // 浏览画师（跳转到 Landing 的画师区或直接搜索）
+    // 浏览画师（跳转到画师名录页）
     const browseArtists = () => {
-      // 可以跳转到一个画师列表页，或者 Landing 页
-      router.push('/')
+      router.push('/artists')
     }
     
     // 访问画师空间
@@ -187,14 +186,15 @@ export default {
 <style scoped>
 .user-dashboard {
   min-height: 100vh;
-  background: #f5f7fa;
+  background: var(--bg-light);
 }
 
 /* 顶部导航 */
 .dashboard-header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  padding: 60px 40px;
+  background: var(--white);
+  color: var(--text-dark);
+  padding: 64px 40px;
+  border-bottom: 1px solid #E5E7EB;
 }
 
 .header-content {
@@ -203,6 +203,7 @@ export default {
 }
 
 .dashboard-header h1 {
+  font-family: var(--font-heading);
   font-size: 2.5rem;
   font-weight: 700;
   margin-bottom: 8px;
@@ -210,14 +211,14 @@ export default {
 
 .header-subtitle {
   font-size: 1.1rem;
-  opacity: 0.9;
+  color: var(--text-light);
 }
 
 /* 主内容区 */
 .dashboard-main {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 40px 20px;
+  padding: 64px 20px;
 }
 
 .container {
@@ -229,13 +230,8 @@ export default {
 .section-title {
   font-size: 1.5rem;
   font-weight: 600;
-  color: #333;
+  color: var(--text-dark);
   margin-bottom: 24px;
-}
-
-/* 快捷入口 */
-.quick-actions {
-  margin-top: -80px;
 }
 
 .action-grid {
@@ -245,20 +241,20 @@ export default {
 }
 
 .action-card {
-  background: white;
-  border-radius: 16px;
+  background: var(--white);
+  border: 1px solid #E5E7EB;
+  border-radius: var(--radius);
   padding: 30px;
   text-align: center;
   text-decoration: none;
   color: inherit;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-  transition: transform 0.3s, box-shadow 0.3s;
+  box-shadow: var(--shadow);
+  transition: var(--transition);
   cursor: pointer;
 }
 
 .action-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 10px 30px rgba(0,0,0,0.12);
+  box-shadow: var(--shadow-hover);
 }
 
 .action-icon {
@@ -270,12 +266,12 @@ export default {
   font-size: 1.1rem;
   font-weight: 600;
   margin-bottom: 8px;
-  color: #333;
+  color: var(--text-dark);
 }
 
 .action-card p {
   font-size: 0.9rem;
-  color: #666;
+  color: var(--text-light);
 }
 
 /* 进行中的订单 */
@@ -286,13 +282,14 @@ export default {
 }
 
 .order-card {
-  background: white;
-  border-radius: 12px;
+  background: var(--white);
+  border: 1px solid #E5E7EB;
+  border-radius: var(--radius);
   padding: 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  box-shadow: var(--shadow);
 }
 
 .order-info {
@@ -316,42 +313,45 @@ export default {
 
 .order-details .artist-name {
   font-size: 0.9rem;
-  color: #666;
+  color: var(--text-light);
   margin-bottom: 8px;
 }
 
 .order-status {
   display: inline-block;
   padding: 4px 12px;
-  border-radius: 20px;
+  border-radius: var(--radius);
   font-size: 0.8rem;
   font-weight: 500;
 }
 
 .order-status.in_progress {
-  background: #e3f2fd;
-  color: #1976d2;
+  background: #EFF6FF;
+  color: #1D4ED8;
 }
 
 .btn-view {
   padding: 10px 20px;
-  background: #f5f5f5;
-  color: #333;
-  border-radius: 8px;
+  background: var(--white);
+  color: var(--text-dark);
+  border: 1px solid var(--text-dark);
+  border-radius: var(--radius);
   text-decoration: none;
-  transition: background 0.3s;
+  transition: var(--transition);
 }
 
 .btn-view:hover {
-  background: #e0e0e0;
+  border-color: var(--accent-color);
+  color: var(--accent-color);
 }
 
 /* 推荐画师 */
 .featured-artists {
-  background: white;
-  border-radius: 16px;
-  padding: 30px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  background: var(--white);
+  border: 1px solid #E5E7EB;
+  border-radius: var(--radius);
+  padding: 32px;
+  box-shadow: var(--shadow);
 }
 
 .section-header {
@@ -367,16 +367,18 @@ export default {
 
 .btn-refresh {
   padding: 8px 16px;
-  background: #f5f5f5;
-  border: none;
-  border-radius: 8px;
+  background: var(--white);
+  color: var(--text-dark);
+  border: 1px solid var(--text-dark);
+  border-radius: var(--radius);
   cursor: pointer;
   font-size: 0.9rem;
-  transition: background 0.3s;
+  transition: var(--transition);
 }
 
 .btn-refresh:hover {
-  background: #e0e0e0;
+  border-color: var(--accent-color);
+  color: var(--accent-color);
 }
 
 .artists-grid {
@@ -390,13 +392,13 @@ export default {
   align-items: center;
   gap: 16px;
   padding: 16px;
-  border-radius: 12px;
+  border-radius: var(--radius);
   cursor: pointer;
-  transition: background 0.3s;
+  transition: var(--transition);
 }
 
 .artist-card:hover {
-  background: #f8f9fa;
+  background: #FAFAFA;
 }
 
 .artist-card .artist-avatar {
@@ -414,13 +416,13 @@ export default {
 
 .artist-card .artist-tags {
   font-size: 0.85rem;
-  color: #666;
+  color: var(--text-light);
   margin-bottom: 4px;
 }
 
 .artist-card .price-range {
   font-size: 0.9rem;
-  color: #667eea;
+  color: var(--accent-color);
   font-weight: 500;
 }
 
@@ -428,9 +430,10 @@ export default {
 .empty-state {
   text-align: center;
   padding: 80px 20px;
-  background: white;
-  border-radius: 16px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  background: var(--white);
+  border: 1px solid #E5E7EB;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
 }
 
 .empty-icon {
@@ -442,28 +445,12 @@ export default {
   font-size: 1.3rem;
   font-weight: 600;
   margin-bottom: 8px;
-  color: #333;
+  color: var(--text-dark);
 }
 
 .empty-state p {
-  color: #666;
+  color: var(--text-light);
   margin-bottom: 24px;
-}
-
-.btn-primary {
-  padding: 12px 32px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity 0.3s;
-}
-
-.btn-primary:hover {
-  opacity: 0.9;
 }
 
 /* 响应式 */

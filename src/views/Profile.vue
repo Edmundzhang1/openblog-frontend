@@ -101,26 +101,42 @@
                 <p class="form-tip">邮箱不可修改</p>
               </div>
 
-              <!-- QQ绑定 -->
+              <!-- 我的主页地址（只读，slug 由系统分配） -->
+              <div class="form-group">
+                <label>我的主页地址</label>
+                <div class="space-path-row">
+                  <router-link :to="mySpacePath" class="space-path-link">{{ mySpacePath }}</router-link>
+                </div>
+                <p class="form-tip">{{ mySpaceHint }}</p>
+              </div>
+
+              <!-- QQ绑定（POST /api/v1/auth/bind-qq，body: { qq_number }） -->
               <div class="form-group qq-bind-group">
                 <label>QQ账号</label>
                 <div class="qq-bind-status">
-                  <span v-if="userInfo.qq_openid" class="qq-bound">
-                    ✅ 已绑定
+                  <span v-if="boundQQ" class="qq-bound">
+                    ✅ {{ tt('已绑定', 'Bound') }}（{{ boundQQ }}）
                   </span>
-                  <span v-else class="qq-unbound">
-                    未绑定
-                  </span>
+                  <input
+                    v-else
+                    type="text"
+                    v-model.trim="qqNumberInput"
+                    class="qq-input"
+                    :placeholder="tt('请输入QQ号', 'Enter QQ number')"
+                    maxlength="15"
+                    :disabled="qqBinding"
+                  >
                   <button 
                     type="button" 
                     class="btn-qq-bind"
-                    :class="{ 'btn-unbind': userInfo.qq_openid }"
+                    :class="{ 'btn-unbind': boundQQ }"
+                    :disabled="qqBinding"
                     @click="handleQQBind"
                   >
-                    {{ userInfo.qq_openid ? '解除绑定' : '去绑定' }}
+                    {{ boundQQ ? tt('解除绑定', 'Unbind') : (qqBinding ? tt('绑定中...', 'Binding...') : tt('绑定', 'Bind')) }}
                   </button>
                 </div>
-                <p class="form-tip">绑定QQ后可以使用QQ快速登录</p>
+                <p class="form-tip">{{ tt('绑定QQ后可以使用QQ快速登录', 'Bind your QQ for quick login') }}</p>
               </div>
 
               <div v-if="updateError" class="alert alert-error">{{ updateError }}</div>
@@ -140,17 +156,8 @@
             </p>
 
             <form @submit.prevent="updatePassword" class="profile-form">
-              <!-- 旧密码 - 仅在有密码时显示 -->
-              <div v-if="hasPassword" class="form-group">
-                <label>旧密码 <span class="required">*</span></label>
-                <input 
-                  type="password" 
-                  v-model="passwordForm.old_password" 
-                  placeholder="请输入旧密码"
-                  required
-                >
-              </div>
-
+              <!-- 后端 SetPassword（POST /api/v1/me/password）不校验旧密码，body 仅需 { password }，
+                   因此不再提供旧密码输入框 -->
               <div class="form-group">
                 <label>{{ hasPassword ? '新密码' : '密码' }} <span class="required">*</span></label>
                 <input 
@@ -199,7 +206,7 @@
       </div>
     </div>
     
-    <!-- 注销确认弹窗（邮箱验证码验证）-->
+    <!-- 注销确认弹窗（DELETE /api/v1/me 无需验证码，保留确认勾选交互）-->
     <div v-if="showDeleteConfirm" class="modal-overlay" @click.self="closeDeleteModal">
       <div class="modal-content danger-modal">
         <div class="modal-header">
@@ -215,29 +222,6 @@
               <li>您的账户余额将被清空</li>
               <li>30天内无法使用相同邮箱注册</li>
             </ul>
-          </div>
-          
-          <!-- 邮箱验证码输入 -->
-          <div class="form-group verify-code-group">
-            <label>请输入邮箱验证码 <span class="required">*</span></label>
-            <p class="form-tip">验证码将发送至：{{ userInfo.email }}</p>
-            <div class="verify-code-input">
-              <input 
-                type="text" 
-                v-model="deleteVerifyCode" 
-                placeholder="请输入6位验证码"
-                maxlength="6"
-                :disabled="deleting"
-              >
-              <button 
-                type="button" 
-                class="btn-send-code"
-                :disabled="codeCountdown > 0 || sendingCode"
-                @click="sendDeleteVerifyCode"
-              >
-                {{ sendingCode ? '发送中...' : (codeCountdown > 0 ? `${codeCountdown}s后重试` : '获取验证码') }}
-              </button>
-            </div>
           </div>
           
           <div class="confirm-checkbox">
@@ -256,7 +240,7 @@
           <button 
             type="button" 
             class="btn-danger" 
-            :disabled="!deleteConfirmChecked || !deleteVerifyCode || deleting"
+            :disabled="!deleteConfirmChecked || deleting"
             @click="handleDeleteAccount"
           >
             {{ deleting ? '注销中...' : '确认注销' }}
@@ -268,16 +252,25 @@
 </template>
 
 <script>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, inject } from 'vue'
 import { useRouter } from 'vue-router'
 import { eventBus, apiRequest } from '../utils/eventBus'
 import { clearSession, updateStoredUser } from '../utils/auth.js'
+import { API_ENDPOINTS } from '../config/api.js'
 import { IMAGES } from '../config/assets.js'
 
 export default {
   name: 'Profile',
   setup() {
     const router = useRouter()
+    const i18n = inject('i18n', { getLocale: () => 'zh' })
+
+    // 新增文案（中英双语）
+    const locale = computed(() => {
+      try { return i18n.getLocale?.() || 'zh' } catch { return 'zh' }
+    })
+    // 双语助手：新增/修改的文案统一走 tt(zh, en)
+    const tt = (zh, en) => (locale.value === 'zh' ? zh : en)
 
     // 默认图片资源
     const defaultAvatar = IMAGES.defaultAvatar
@@ -292,10 +285,29 @@ export default {
       nickname: '',
       avatar_url: '',
       bio: '',
+      slug: '',
       role: 'client',
       has_password: false,
-      qq_openid: null
+      contact_info: ''
     })
+    
+    // 已绑定的 QQ 号（后端 BindQQ 写入 contact_info JSON 的 qq 字段）
+    const boundQQ = computed(() => {
+      try {
+        const info = JSON.parse(userInfo.contact_info || '{}')
+        return info.qq || ''
+      } catch {
+        return ''
+      }
+    })
+    const qqNumberInput = ref('')
+    const qqBinding = ref(false)
+    
+    // 我的主页地址（slug 未设置时回退 uid；slug 仅管理员可修改）
+    const mySpacePath = computed(() => `/@${userInfo.slug || userInfo.uid}`)
+    const mySpaceHint = computed(() => locale.value === 'zh'
+      ? '主页路径由系统分配，如需修改请联系管理员'
+      : 'Your page path is assigned by the system. Contact an administrator to change it.')
     
     // 是否有密码（控制表单显示）
     const hasPassword = computed(() => userInfo.has_password)
@@ -324,9 +336,8 @@ export default {
     const isDragging = ref(false)
     const selectedAvatarFile = ref(null)
     
-    // 密码表单
+    // 密码表单（后端不校验旧密码，仅提交新密码）
     const passwordForm = reactive({
-      old_password: '',
       new_password: '',
       confirm_password: ''
     })
@@ -339,21 +350,17 @@ export default {
     const passwordError = ref('')
     const passwordSuccess = ref('')
     
-    // 账号注销相关（改为邮箱验证码验证）
+    // 账号注销相关（确认弹窗 + DELETE /api/v1/me）
     const showDeleteConfirm = ref(false)
-    const deleteVerifyCode = ref('')
     const deleteConfirmChecked = ref(false)
     const deleting = ref(false)
     const deleteError = ref('')
-    const codeCountdown = ref(0)
-    const sendingCode = ref(false)
-    let countdownTimer = null
     
-    // 获取个人信息
+    // 获取个人信息（GET /api/v1/me）
     const fetchProfile = async () => {
       try {
-        const res = await apiRequest('/api/user/profile', { showError: false })
-        Object.assign(userInfo, res)
+        const res = await apiRequest(API_ENDPOINTS.ME, { showError: false })
+        Object.assign(userInfo, res || {})
         // 同步表单数据
         profileForm.nickname = res.nickname || ''
         profileForm.avatar_url = res.avatar_url || ''
@@ -412,15 +419,15 @@ export default {
       reader.readAsDataURL(file)
     }
     
-    // 上传头像
+    // 上传头像（统一走 /api/v1/upload，字段名 file）
     const uploadAvatar = async () => {
       if (!selectedAvatarFile.value) return null
       
       const formData = new FormData()
-      formData.append('avatar', selectedAvatarFile.value)
+      formData.append('file', selectedAvatarFile.value)
       
       try {
-        const res = await apiRequest('/api/v1/upload/avatar', {
+        const res = await apiRequest(API_ENDPOINTS.UPLOAD, {
           method: 'POST',
           body: formData,
           showError: false
@@ -445,7 +452,8 @@ export default {
           avatarUrl = await uploadAvatar()
         }
         
-        const res = await apiRequest('/api/user/profile', {
+        // PUT /api/v1/me（白名单：nickname/avatar_url/bio/contact_info；slug 不可修改）
+        await apiRequest(API_ENDPOINTS.ME_UPDATE, {
           method: 'PUT',
           showError: false,
           body: {
@@ -492,42 +500,43 @@ export default {
       
       // 验证新密码和确认密码一致
       if (passwordForm.new_password !== passwordForm.confirm_password) {
-        passwordError.value = '两次输入的密码不一致'
+        passwordError.value = tt('两次输入的密码不一致', 'Passwords do not match')
         return
       }
       
       // 验证密码长度
       if (passwordForm.new_password.length < 6) {
-        passwordError.value = '密码长度至少6位'
+        passwordError.value = tt('密码长度至少6位', 'Password must be at least 6 characters')
         return
       }
       
       updatingPassword.value = true
+      // 后端不校验旧密码，is_first_set 由前端按 has_password 推断（仅用于文案）
+      const isFirstSet = !hasPassword.value
       
       try {
-        const res = await apiRequest('/api/user/password', {
-          method: 'PUT',
+        // POST /api/v1/me/password，body 仅需 { password }
+        await apiRequest(API_ENDPOINTS.ME_PASSWORD, {
+          method: 'POST',
           showError: false,
           body: {
-            old_password: hasPassword.value ? passwordForm.old_password : '',
-            new_password: passwordForm.new_password
+            password: passwordForm.new_password
           }
         })
         
         // 清空表单
-        passwordForm.old_password = ''
         passwordForm.new_password = ''
         passwordForm.confirm_password = ''
         
         // 更新 has_password 状态
         userInfo.has_password = true
         
-        passwordSuccess.value = res.is_first_set 
-          ? '密码设置成功，请重新登录' 
-          : '密码修改成功，请重新登录'
+        passwordSuccess.value = isFirstSet
+          ? tt('密码设置成功，请重新登录', 'Password set. Please log in again.')
+          : tt('密码修改成功，请重新登录', 'Password updated. Please log in again.')
         
         eventBus.emit('show-toast', { 
-          message: res.is_first_set ? '密码设置成功' : '密码修改成功', 
+          message: isFirstSet ? tt('密码设置成功', 'Password set') : tt('密码修改成功', 'Password updated'), 
           type: 'success' 
         })
         
@@ -539,121 +548,77 @@ export default {
         
       } catch (error) {
         console.error('修改密码失败:', error)
-        passwordError.value = error.displayMessage || error.message || '修改失败'
+        passwordError.value = error.displayMessage || error.message || tt('修改失败', 'Update failed')
       } finally {
         updatingPassword.value = false
       }
     }
     
-    // QQ绑定
+    // QQ绑定（POST /api/v1/auth/bind-qq，body: { qq_number }，要求 5-15 位数字）
     const handleQQBind = async () => {
-      if (userInfo.qq_openid) {
-        // 解除绑定（暂未实现，需要后端支持）
-        eventBus.emit('show-toast', { message: '暂不支持解除绑定', type: 'warning' })
+      if (boundQQ.value) {
+        // 解除绑定（后端暂无解绑接口）
+        eventBus.emit('show-toast', { message: tt('暂不支持解除绑定', 'Unbinding is not supported yet'), type: 'warning' })
         return
       }
       
+      if (!/^\d{5,15}$/.test(qqNumberInput.value)) {
+        eventBus.emit('show-toast', { message: tt('请输入 5-15 位数字 QQ 号', 'Please enter a 5-15 digit QQ number'), type: 'error' })
+        return
+      }
+      
+      qqBinding.value = true
       try {
-        const res = await apiRequest('/api/user/qq/bind', { showError: false })
-        if (res.auth_url) {
-          window.location.href = res.auth_url
-        }
+        await apiRequest(API_ENDPOINTS.AUTH_BIND_QQ, {
+          method: 'POST',
+          showError: false,
+          body: { qq_number: qqNumberInput.value }
+        })
+        eventBus.emit('show-toast', { message: tt('QQ号绑定成功', 'QQ account bound'), type: 'success' })
+        qqNumberInput.value = ''
+        // 刷新 contact_info，更新绑定状态展示
+        await fetchProfile()
       } catch (error) {
         console.error('QQ绑定失败:', error)
-        eventBus.emit('show-toast', { message: 'QQ绑定初始化失败', type: 'error' })
+        eventBus.emit('show-toast', {
+          message: error.displayMessage || error.message || tt('QQ绑定失败', 'Failed to bind QQ'),
+          type: 'error'
+        })
+      } finally {
+        qqBinding.value = false
       }
     }
     
     // 关闭注销弹窗并清空状态
     const closeDeleteModal = () => {
       showDeleteConfirm.value = false
-      deleteVerifyCode.value = ''
       deleteConfirmChecked.value = false
       deleteError.value = ''
-      // 清除倒计时
-      if (countdownTimer) {
-        clearInterval(countdownTimer)
-        countdownTimer = null
-      }
-      codeCountdown.value = 0
     }
     
-    // 发送注销验证码
-    const sendDeleteVerifyCode = async () => {
-      if (codeCountdown.value > 0) return
-      
-      sendingCode.value = true
-      try {
-        await apiRequest('/api/v1/auth/email/send-code', {
-          method: 'POST',
-          showError: false,
-          body: {
-            email: userInfo.email,
-            type: 'delete_account'  // 可以添加类型区分用途
-          }
-        })
-        
-        eventBus.emit('show-toast', { message: '验证码已发送，请查收邮件', type: 'success' })
-        
-        // 开始倒计时
-        codeCountdown.value = 60
-        countdownTimer = setInterval(() => {
-          codeCountdown.value--
-          if (codeCountdown.value <= 0) {
-            clearInterval(countdownTimer)
-            countdownTimer = null
-          }
-        }, 1000)
-      } catch (error) {
-        console.error('发送验证码失败:', error)
-        eventBus.emit('show-toast', { 
-          message: error.displayMessage || error.message || '发送验证码失败', 
-          type: 'error' 
-        })
-      } finally {
-        sendingCode.value = false
-      }
-    }
-    
-    // 注销账号（使用邮箱验证码验证）
+    // 注销账号（DELETE /api/v1/me，软删除当前账号，无需请求体）
     const handleDeleteAccount = async () => {
       deleteError.value = ''
-      
-      // 验证验证码格式
-      if (!deleteVerifyCode.value || deleteVerifyCode.value.length !== 6) {
-        deleteError.value = '请输入6位验证码'
-        return
-      }
-      
       deleting.value = true
       
       try {
-        await apiRequest('/api/user/account', {
+        await apiRequest(API_ENDPOINTS.ME_DELETE, {
           method: 'DELETE',
-          showError: false,
-          body: {
-            code: deleteVerifyCode.value
-          }
+          showError: false
         })
         
-        // 清除倒计时
-        if (countdownTimer) {
-          clearInterval(countdownTimer)
-          countdownTimer = null
-        }
-        
         eventBus.emit('show-toast', { 
-          message: '账号已注销，感谢您的使用', 
+          message: tt('账号已注销，感谢您的使用', 'Your account has been deleted. Thank you for using our service.'), 
           type: 'success' 
         })
         
-        // 清除登录状态并跳转
+        // 清除本地登录态并跳回首页
         clearSession()
-        router.push('/login')
+        router.push('/')
         
       } catch (error) {
         console.error('注销失败:', error)
-        deleteError.value = error.displayMessage || error.message || '注销失败'
+        deleteError.value = error.displayMessage || error.message || tt('注销失败', 'Failed to delete account')
       } finally {
         deleting.value = false
       }
@@ -664,11 +629,14 @@ export default {
     })
     
     return {
+      tt,
       activeTab,
       defaultAvatar,
       userInfo,
       hasPassword,
       roleText,
+      mySpacePath,
+      mySpaceHint,
       profileForm,
       passwordForm,
       updating,
@@ -687,17 +655,16 @@ export default {
       handleFileChange,
       handleDrop,
       // QQ绑定
+      boundQQ,
+      qqNumberInput,
+      qqBinding,
       handleQQBind,
-      // 账号注销（邮箱验证码）
+      // 账号注销（确认弹窗 + DELETE /me）
       showDeleteConfirm,
-      deleteVerifyCode,
       deleteConfirmChecked,
       deleting,
       deleteError,
-      codeCountdown,
-      sendingCode,
       closeDeleteModal,
-      sendDeleteVerifyCode,
       handleDeleteAccount
     }
   }
@@ -710,28 +677,12 @@ export default {
   background: var(--bg-light);
 }
 
-.page-header {
-  background: linear-gradient(135deg, var(--primary-color) 0%, var(--accent-color) 100%);
-  color: var(--white);
-  padding: 50px 0;
-  text-align: center;
-}
-
-.page-header h1 {
-  font-size: 2rem;
-  margin-bottom: 8px;
-}
-
-.page-header p {
-  opacity: 0.9;
-}
-
 .profile-wrapper {
   display: grid;
   grid-template-columns: 280px 1fr;
   gap: 30px;
   max-width: 1100px;
-  margin: 30px auto;
+  margin: 48px auto 64px;
   padding: 0 20px;
 }
 
@@ -762,7 +713,7 @@ export default {
   border-radius: 50%;
   object-fit: cover;
   margin-bottom: 15px;
-  border: 3px solid var(--primary-color);
+  border: 2px solid #E5E7EB;
 }
 
 .user-card h3 {
@@ -773,7 +724,7 @@ export default {
 
 .user-card .user-uid {
   font-size: 0.8rem;
-  color: var(--primary-color);
+  color: var(--text-muted);
   font-weight: 500;
   margin-bottom: 5px;
   font-family: monospace;
@@ -791,7 +742,7 @@ export default {
   background: var(--primary-color);
   color: var(--white);
   padding: 4px 12px;
-  border-radius: 20px;
+  border-radius: var(--radius);
   font-size: 0.75rem;
 }
 
@@ -817,7 +768,7 @@ export default {
 }
 
 .profile-nav button:hover {
-  background: var(--bg-light);
+  background: #F5F5F5;
 }
 
 .profile-nav button.active {
@@ -829,7 +780,7 @@ export default {
 .profile-content {
   background: var(--white);
   border-radius: var(--radius);
-  padding: 30px;
+  padding: 40px;
   box-shadow: var(--shadow);
   min-height: 500px;
 }
@@ -862,14 +813,14 @@ export default {
 }
 
 .form-group label .required {
-  color: #e74c3c;
+  color: #EF4444;
 }
 
 .form-group input,
 .form-group textarea {
   width: 100%;
   padding: 12px 15px;
-  border: 1px solid #ddd;
+  border: 1px solid #E5E7EB;
   border-radius: var(--radius-sm);
   font-size: 1rem;
   transition: var(--transition);
@@ -879,11 +830,11 @@ export default {
 .form-group input:focus,
 .form-group textarea:focus {
   outline: none;
-  border-color: var(--primary-color);
+  border-color: var(--accent-color);
 }
 
 .form-group input:disabled {
-  background: var(--bg-light);
+  background: #FAFAFA;
   cursor: not-allowed;
 }
 
@@ -896,6 +847,28 @@ export default {
   margin-top: 6px;
   font-size: 0.85rem;
   color: var(--text-light);
+}
+
+/* 我的主页地址（只读） */
+.space-path-row {
+  display: flex;
+  align-items: center;
+  padding: 12px 15px;
+  border: 1px solid #E5E7EB;
+  border-radius: var(--radius-sm);
+  background: #FAFAFA;
+}
+
+.space-path-link {
+  color: var(--primary-color);
+  font-weight: 600;
+  font-family: monospace;
+  text-decoration: none;
+}
+
+.space-path-link:hover {
+  color: var(--accent-color);
+  text-decoration: underline;
 }
 
 .btn-primary {
@@ -927,20 +900,20 @@ export default {
 }
 
 .alert-error {
-  background: #ffebee;
-  color: #c62828;
-  border: 1px solid #ffcdd2;
+  background: #FEF2F2;
+  color: #B91C1C;
+  border: 1px solid #FECACA;
 }
 
 .alert-success {
-  background: #e8f5e9;
-  color: #2e7d32;
-  border: 1px solid #a5d6a7;
+  background: #F0FDF4;
+  color: #15803D;
+  border: 1px solid #BBF7D0;
 }
 
 /* QQ绑定 */
 .qq-bind-group {
-  background: var(--bg-light);
+  background: #FAFAFA;
   padding: 15px;
   border-radius: var(--radius-sm);
 }
@@ -953,8 +926,21 @@ export default {
 }
 
 .qq-bound {
-  color: #2e7d32;
+  color: #15803D;
   font-weight: 500;
+}
+
+.qq-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #E5E7EB;
+  border-radius: var(--radius-sm);
+  font-size: 0.95rem;
+}
+
+.qq-input:focus {
+  outline: none;
+  border-color: var(--accent-color);
 }
 
 .qq-unbound {
@@ -963,8 +949,8 @@ export default {
 
 .btn-qq-bind {
   padding: 8px 16px;
-  background: #12B7F5;
-  color: white;
+  background: var(--primary-color);
+  color: var(--white);
   border: none;
   border-radius: var(--radius-sm);
   cursor: pointer;
@@ -973,30 +959,31 @@ export default {
 }
 
 .btn-qq-bind:hover {
-  background: #0ea5e0;
+  background: var(--accent-color);
 }
 
 .btn-qq-bind.btn-unbind {
-  background: #e0e0e0;
+  background: var(--white);
   color: var(--text-dark);
+  border: 1px solid #E5E7EB;
 }
 
 .btn-qq-bind.btn-unbind:hover {
-  background: #d0d0d0;
+  background: #FAFAFA;
 }
 
 /* 危险区域 */
 .danger-zone {
   max-width: 1100px;
-  margin: 30px auto;
-  padding: 25px;
-  background: #ffebee;
-  border: 1px solid #ffcdd2;
+  margin: 0 auto 64px;
+  padding: 32px;
+  background: #FEF2F2;
+  border: 1px solid #FECACA;
   border-radius: var(--radius);
 }
 
 .danger-zone h3 {
-  color: #c62828;
+  color: #B91C1C;
   margin-bottom: 15px;
   font-size: 1.1rem;
 }
@@ -1020,8 +1007,8 @@ export default {
 
 .btn-danger {
   padding: 10px 24px;
-  background: #e53935;
-  color: white;
+  background: #EF4444;
+  color: var(--white);
   border: none;
   border-radius: var(--radius-sm);
   cursor: pointer;
@@ -1031,7 +1018,7 @@ export default {
 }
 
 .btn-danger:hover:not(:disabled) {
-  background: #c62828;
+  background: #DC2626;
 }
 
 .btn-danger:disabled {
@@ -1064,7 +1051,7 @@ export default {
 }
 
 .danger-modal {
-  border-top: 4px solid #e53935;
+  border-top: 4px solid #EF4444;
 }
 
 .modal-header {
@@ -1072,11 +1059,11 @@ export default {
   justify-content: space-between;
   align-items: center;
   padding: 20px;
-  border-bottom: 1px solid var(--bg-light);
+  border-bottom: 1px solid #E5E7EB;
 }
 
 .modal-header h3 {
-  color: #c62828;
+  color: #B91C1C;
   font-size: 1.2rem;
 }
 
@@ -1093,15 +1080,15 @@ export default {
 }
 
 .warning-box {
-  background: #fff3e0;
-  border: 1px solid #ffb74d;
+  background: #FFFBEB;
+  border: 1px solid #FDE68A;
   border-radius: var(--radius-sm);
   padding: 15px;
   margin-bottom: 20px;
 }
 
 .warning-title {
-  color: #e65100;
+  color: #B45309;
   font-weight: 600;
   margin-bottom: 10px;
 }
@@ -1138,14 +1125,14 @@ export default {
   justify-content: flex-end;
   gap: 15px;
   padding: 20px;
-  border-top: 1px solid var(--bg-light);
+  border-top: 1px solid #E5E7EB;
 }
 
 .btn-secondary {
   padding: 10px 24px;
-  background: var(--bg-light);
+  background: var(--white);
   color: var(--text-dark);
-  border: none;
+  border: 1px solid var(--text-dark);
   border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: 0.95rem;
@@ -1153,7 +1140,8 @@ export default {
 }
 
 .btn-secondary:hover {
-  background: #e0e0e0;
+  background: var(--text-dark);
+  color: var(--white);
 }
 
 @media (max-width: 768px) {
@@ -1168,31 +1156,30 @@ export default {
   position: relative;
   width: 150px;
   height: 150px;
-  border: 2px dashed #ddd;
+  border: 2px dashed #D1D5DB;
   border-radius: var(--radius);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: var(--transition);
   overflow: hidden;
-  background: var(--bg-light);
+  background: #FAFAFA;
 }
 
 .avatar-upload-wrapper:hover {
-  border-color: var(--primary-color);
-  background: #f0f7ff;
+  border-color: var(--accent-color);
+  background: #EFF6FF;
 }
 
 .avatar-upload-wrapper.drag-over {
-  border-color: var(--primary-color);
-  background: #e3f2fd;
-  transform: scale(1.02);
+  border-color: var(--accent-color);
+  background: #EFF6FF;
 }
 
 .avatar-upload-wrapper.has-preview {
   border-style: solid;
-  border-color: var(--primary-color);
+  border-color: #E5E7EB;
 }
 
 .avatar-preview {
@@ -1268,61 +1255,8 @@ export default {
 }
 
 .avatar-error {
-  color: #e53935;
+  color: #EF4444;
   font-size: 0.85rem;
   margin-top: 8px;
-}
-
-/* 邮箱验证码输入框样式 */
-.verify-code-group {
-  margin-top: 20px;
-}
-
-.verify-code-input {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.verify-code-input input {
-  flex: 1;
-  text-align: center;
-  letter-spacing: 4px;
-  font-size: 1.1rem;
-  font-weight: 500;
-}
-
-.btn-send-code {
-  padding: 12px 16px;
-  background: var(--primary-color);
-  color: white;
-  border: none;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  font-size: 0.9rem;
-  white-space: nowrap;
-  transition: var(--transition);
-  min-width: 110px;
-}
-
-.btn-send-code:hover:not(:disabled) {
-  background: var(--accent-color);
-}
-
-.btn-send-code:disabled {
-  background: #ccc;
-  cursor: not-allowed;
-}
-
-@media (max-width: 480px) {
-  .verify-code-input {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  
-  .btn-send-code {
-    width: 100%;
-    padding: 10px;
-  }
 }
 </style>

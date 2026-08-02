@@ -190,7 +190,7 @@ export default {
 
 <style scoped>
 .contact-section {
-  padding: 60px 0;
+  padding: 64px 0;
   min-height: 100vh;
 }
 
@@ -243,17 +243,16 @@ export default {
 .contact-card {
   background: var(--white);
   padding: 30px;
-  border-radius: 16px;
+  border-radius: var(--radius);
   text-align: center;
   text-decoration: none;
   color: inherit;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-  transition: transform 0.3s, box-shadow 0.3s;
+  border: 1px solid #E5E7EB;
+  transition: var(--transition);
 }
 
 .contact-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+  box-shadow: var(--shadow-hover);
 }
 
 .contact-icon {
@@ -277,9 +276,14 @@ export default {
   display: inline-block;
   padding: 10px 24px;
   background: var(--primary-color);
-  color: white;
-  border-radius: 8px;
+  color: var(--white);
+  border-radius: var(--radius);
   font-size: 0.9rem;
+  transition: var(--transition);
+}
+
+.contact-card:hover .contact-btn {
+  background: var(--accent-color);
 }
 
 .faq-section {
@@ -302,8 +306,8 @@ export default {
 .faq-item {
   background: var(--white);
   padding: 24px;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  border-radius: var(--radius);
+  border: 1px solid #E5E7EB;
 }
 
 .faq-item h4 {
@@ -316,24 +320,9 @@ export default {
   color: var(--text-dark);
   line-height: 1.6;
 }
-
-.btn {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  transition: all 0.3s;
-}
-
-.btn-outline {
-  background: transparent;
-  border: 1px solid var(--primary-color);
-  color: var(--primary-color);
-}
-
-.btn-outline:hover {
-  background: var(--primary-color);
-  color: white;
+@media (max-width: 768px) {
+  .contact-section {
+    padding: 40px 0;
+  }
 }
 </style>

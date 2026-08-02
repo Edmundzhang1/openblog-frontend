@@ -1,6 +1,6 @@
 <template>
   <div class="about-page">
-    <header class="page-header">
+    <header class="page-header fade-in">
       <div class="container">
         <h1>{{ content.title }}</h1>
         <p>{{ content.subtitle }}</p>

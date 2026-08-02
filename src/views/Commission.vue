@@ -560,7 +560,7 @@ export default {
 .style-price { align-self: start; padding: 2px 10px 10px 0; color: var(--text-dark); font-size: 0.84rem; font-weight: 600; }
 .field-counter { display: block; text-align: right; color: var(--text-muted); font-size: 0.78rem; margin-top: 4px; }
 .file-upload { padding: 32px; }
-.upload-symbol { display: grid; place-items: center; width: 38px; height: 38px; margin: 0 auto 8px; border: 1px solid #E5E5E5; color: var(--primary-color); font-size: 1.5rem; border-radius: 50%; }
+.upload-symbol { display: grid; place-items: center; width: 38px; height: 38px; margin: 0 auto 8px; border: 1px solid var(--border-color); color: var(--primary-color); font-size: 1.5rem; border-radius: 50%; }
 .file-upload small { color: var(--text-muted); }
 .file-list { display: grid; gap: 8px; margin-top: 12px; }
 .file-list li { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto 28px; gap: 10px; align-items: center; padding: 9px 12px; background: #F5F5F5; border-radius: var(--radius); }

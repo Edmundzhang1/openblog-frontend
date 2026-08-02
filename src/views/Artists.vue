@@ -19,15 +19,15 @@
             <router-link
               v-for="artist in artists"
               :key="artist.uid"
-              :to="`/artists/${artist.uid}`"
+              :to="`/@${artist.slug || artist.uid}`"
               class="artist-card"
             >
               <span class="artist-avatar" :style="avatarStyle(artist)">{{ artistInitial(artist) }}</span>
               <span class="artist-info">
                 <strong>{{ artist.nickname }}</strong>
                 <small>{{ artist.bio || content.artistFallbackBio }}</small>
-                <span v-if="artist.tags?.length" class="tag-row">
-                  <span v-for="tag in artist.tags" :key="tag">{{ tag }}</span>
+                <span v-if="artistTags(artist).length" class="tag-row">
+                  <span v-for="tag in artistTags(artist)" :key="tag">{{ tag }}</span>
                 </span>
               </span>
               <span class="artist-meta">
@@ -124,7 +124,8 @@ export default {
           auth: false,
           showError: false
         })
-        this.artists = Array.isArray(data?.items) ? data.items : []
+        // 后端返回 { list, total, page, page_size }；兼容旧的 items 字段
+        this.artists = Array.isArray(data?.list) ? data.list : (Array.isArray(data?.items) ? data.items : [])
         this.total = Number(data?.total || 0)
       } catch (err) {
         this.error = err.message || this.content.loadFailed
@@ -143,6 +144,12 @@ export default {
     },
     artistInitial(artist) {
       return String(artist.nickname || 'A').slice(0, 1).toUpperCase()
+    },
+    // 后端 artist_tags 是逗号分隔字符串；兼容数组形式
+    artistTags(artist) {
+      if (Array.isArray(artist?.tags)) return artist.tags
+      if (Array.isArray(artist?.artist_tags)) return artist.artist_tags
+      return String(artist?.artist_tags || '').split(',').map((tag) => tag.trim()).filter(Boolean)
     },
     formatPriceRange(artist) {
       if (!artist.price_range_min && !artist.price_range_max) return this.locale === 'zh' ? '价格面议' : 'Ask for quote'
@@ -195,7 +202,7 @@ export default {
   align-items: center;
   padding: 20px;
   background: var(--white);
-  border: 1px solid #E5E5E5;
+  border: 1px solid var(--border-color);
   border-radius: var(--radius);
   text-decoration: none;
   transition: var(--transition);
@@ -260,12 +267,12 @@ export default {
   background: #F5F5F5;
   color: var(--text-light);
   font-size: 0.74rem;
-  border-radius: 3px;
+  border-radius: var(--radius);
 }
 
 .status {
   padding: 4px 12px;
-  border-radius: 20px;
+  border-radius: var(--radius);
   font-size: 0.78rem;
   font-weight: 600;
 }
@@ -291,7 +298,7 @@ export default {
 
 .pagination button {
   padding: 9px 18px;
-  border: 1px solid #E5E5E5;
+  border: 1px solid var(--border-color);
   background: var(--white);
   border-radius: var(--radius-sm);
   cursor: pointer;

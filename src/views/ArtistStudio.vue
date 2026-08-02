@@ -1,6 +1,6 @@
 <template>
   <div class="studio-page">
-    <header class="page-header">
+    <header class="page-header fade-in">
       <div class="container">
         <h1>{{ content.title }}</h1>
         <p>{{ content.subtitle }}</p>
@@ -32,7 +32,7 @@
         <div v-if="activeTab === 'profile'" class="panel">
           <div class="panel-header">
             <h2>{{ content.profileTitle }}</h2>
-            <router-link :to="`/artists/${currentUser?.uid}`" class="view-home-link">
+            <router-link :to="`/@${currentUser?.slug || currentUser?.uid}`" class="view-home-link">
               {{ content.viewMyHome }} →
             </router-link>
           </div>
@@ -152,7 +152,7 @@
                 >
                   <span class="day-number">{{ day.day || '' }}</span>
                   <span v-if="dayInfo(day)?.note" class="day-note">{{ dayInfo(day).note }}</span>
-                  <span v-if="capacityLabel(day)" class="day-capacity">{{ capacityLabel(day) }}</span>
+                  <!-- 容量字段已移除：后端 available-dates 模型只有 date/is_full/note，没有容量概念 -->
                 </div>
               </div>
               <div class="calendar-legend">
@@ -192,13 +192,8 @@
               </button>
             </div>
           </div>
-          <div class="form-group">
-            <label for="slot-capacity">{{ content.slotCapacity }}</label>
-            <input id="slot-capacity" v-model.number="slotModal.total_capacity" type="number" min="1" max="99">
-            <small v-if="slotModal.booked_count" class="field-hint">
-              {{ content.bookedCount(slotModal.booked_count) }}
-            </small>
-          </div>
+          <!-- 容量输入已移除：后端 available-dates 模型（date/is_full/note）不支持当日容量，
+               约满状态请直接使用「约满」状态标记 -->
           <div class="form-group">
             <label for="slot-note">{{ content.slotNote }}</label>
             <input id="slot-note" v-model.trim="slotModal.note" type="text" maxlength="500" :placeholder="content.slotNotePlaceholder">
@@ -222,6 +217,12 @@ import { inject } from 'vue'
 import { API_ENDPOINTS, getAssetUrl } from '../config/api'
 import { apiRequest, eventBus, showToast } from '../utils/eventBus'
 import { getCurrentUser } from '../utils/auth'
+import {
+  getMyAvailableDatesAPI,
+  addAvailableDateAPI,
+  updateAvailableDateAPI,
+  deleteAvailableDateAPI
+} from '../api/availableDate.js'
 
 const CONTENT = {
   zh: {
@@ -261,10 +262,8 @@ const CONTENT = {
     legendUnavailable: '休息',
     pendingHint: (n) => `${n} 项修改待保存`,
     slotStatus: '状态',
-    slotCapacity: '当日容量（单数）',
     slotNote: '备注',
     slotNotePlaceholder: '可选，公开展示',
-    bookedCount: (n) => `已约 ${n} 单`,
     clearDay: '清除该天',
     cancel: '取消',
     confirm: '确定',
@@ -308,10 +307,8 @@ const CONTENT = {
     legendUnavailable: 'Unavailable',
     pendingHint: (n) => `${n} change(s) pending`,
     slotStatus: 'Status',
-    slotCapacity: 'Daily capacity',
     slotNote: 'Note',
     slotNotePlaceholder: 'Optional, shown publicly',
-    bookedCount: (n) => `${n} booked`,
     clearDay: 'Clear this day',
     cancel: 'Cancel',
     confirm: 'OK',
@@ -419,6 +416,7 @@ export default {
     async loadProfile() {
       this.profileLoading = true
       try {
+        // 画师主页资料与当前用户资料共用 GET /me（slug 等字段只读，不在此处修改）
         const data = await apiRequest(API_ENDPOINTS.ME_ARTIST_PROFILE)
         this.profile = {
           nickname: data?.nickname || '',
@@ -428,7 +426,10 @@ export default {
           commission_open: Boolean(data?.commission_open),
           portfolio_urls: Array.isArray(data?.portfolio_urls) ? [...data.portfolio_urls] : []
         }
-        this.tagsInput = Array.isArray(data?.tags) ? data.tags.join(', ') : ''
+        // /me 的 artist_tags 是逗号分隔字符串；兼容数组形式
+        this.tagsInput = Array.isArray(data?.artist_tags)
+          ? data.artist_tags.join(', ')
+          : String(data?.artist_tags || '')
         this.priceMinYuan = data?.price_range_min ? data.price_range_min / 100 : null
         this.priceMaxYuan = data?.price_range_max ? data.price_range_max / 100 : null
       } catch {
@@ -436,12 +437,6 @@ export default {
       } finally {
         this.profileLoading = false
       }
-    },
-    parseTags() {
-      return this.tagsInput
-        .split(/[,，]/)
-        .map((tag) => tag.trim())
-        .filter(Boolean)
     },
     async uploadImage(file) {
       if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
@@ -489,20 +484,33 @@ export default {
       this.profileError = ''
       this.profileSaving = true
       try {
-        await apiRequest(API_ENDPOINTS.ME_ARTIST_PROFILE, {
-          method: 'PATCH',
+        // 基本字段走 PUT /me（白名单 nickname/avatar_url/bio/contact_info）
+        await apiRequest(API_ENDPOINTS.ME_UPDATE, {
+          method: 'PUT',
           body: {
             nickname: this.profile.nickname,
             avatar_url: this.profile.avatar_url,
-            bio: this.profile.bio,
-            artist_tags: this.parseTags(),
-            commission_rules: this.profile.commission_rules,
-            price_range_min: Math.round((this.priceMinYuan || 0) * 100),
-            price_range_max: Math.round((this.priceMaxYuan || 0) * 100),
-            commission_open: this.profile.commission_open,
-            portfolio_urls: this.profile.portfolio_urls
+            bio: this.profile.bio
           }
         })
+        // 画师字段走 PUT /me/artist-profile（ARTIST/ADMIN，只更新传入字段）
+        const artistBody = {
+          artist_tags: this.tagsInput.trim(),
+          commission_rules: this.profile.commission_rules,
+          commission_open: this.profile.commission_open
+        }
+        // 价格区间：UI 单位为元，后端为分（int64）；留空则不传，保留原值
+        if (this.priceMinYuan !== null && this.priceMinYuan !== '' && !Number.isNaN(this.priceMinYuan)) {
+          artistBody.price_range_min = Math.round(this.priceMinYuan * 100)
+        }
+        if (this.priceMaxYuan !== null && this.priceMaxYuan !== '' && !Number.isNaN(this.priceMaxYuan)) {
+          artistBody.price_range_max = Math.round(this.priceMaxYuan * 100)
+        }
+        await apiRequest(API_ENDPOINTS.ME_ARTIST_PROFILE_UPDATE, {
+          method: 'PUT',
+          body: artistBody
+        })
+        // 两个请求都成功才提示成功；任一失败进入 catch 展示错误
         showToast(this.content.saved, 'success')
       } catch (error) {
         this.profileError = error.message || this.content.saveFailed
@@ -511,14 +519,22 @@ export default {
       }
     },
 
-    // ---- 排期管理 ----
+    // ---- 排期管理（数据层：/user/available-dates，模型 date/is_full/note）----
+    // 状态映射：AVAILABLE = 记录存在且 is_full=false；BOOKED = is_full=true；
+    // UNAVAILABLE = is_full=true 且 note='休息'（读取时按 note 还原）
     async loadSchedule() {
       this.scheduleLoading = true
       try {
-        const data = await apiRequest(`${API_ENDPOINTS.ME_SCHEDULE}?month=${this.monthKey}`)
+        const res = await getMyAvailableDatesAPI(this.viewYear, this.viewMonth)
+        const list = Array.isArray(res?.data) ? res.data : []
         const map = {}
-        for (const slot of data?.slots || []) {
-          map[slot.slot_date] = slot
+        for (const item of list) {
+          if (!item?.date) continue
+          const note = item.note || ''
+          map[item.date] = {
+            status: item.is_full ? (note === '休息' ? 'UNAVAILABLE' : 'BOOKED') : 'AVAILABLE',
+            note
+          }
         }
         this.slots = map
         this.pendingSlots = {}
@@ -567,14 +583,6 @@ export default {
       const status = labels[info.status] || info.status
       return info.note ? `${status}: ${info.note}` : status
     },
-    capacityLabel(day) {
-      const info = this.dayInfo(day)
-      if (!info) return ''
-      const total = info.total_capacity
-      const booked = this.slots[day.dateStr]?.booked_count || 0
-      if (!total) return booked ? `${booked}` : ''
-      return booked ? `${booked}/${total}` : `${total}`
-    },
     openSlotModal(day) {
       const existing = this.slots[day.dateStr]
       const staged = this.pendingSlots[day.dateStr]
@@ -583,8 +591,6 @@ export default {
         dateStr: day.dateStr,
         status: source?.status || 'AVAILABLE',
         note: source?.note || '',
-        total_capacity: source?.total_capacity || 1,
-        booked_count: existing?.booked_count || 0,
         hasExisting: Boolean(existing) || this.pendingDeletes.has(day.dateStr)
       }
     },
@@ -594,13 +600,11 @@ export default {
     stageSlot() {
       const modal = this.slotModal
       if (!modal) return
-      const capacity = Math.max(1, Math.min(99, Number(modal.total_capacity) || 1))
       const next = { ...this.pendingSlots }
       next[modal.dateStr] = {
         slot_date: modal.dateStr,
         status: modal.status,
-        note: modal.note,
-        total_capacity: capacity
+        note: modal.note
       }
       this.pendingSlots = next
       this.pendingDeletes = new Set([...this.pendingDeletes].filter((d) => d !== modal.dateStr))
@@ -620,20 +624,30 @@ export default {
     async saveSchedule() {
       this.scheduleSaving = true
       try {
-        const staged = Object.values(this.pendingSlots)
-        if (staged.length) {
-          await apiRequest(API_ENDPOINTS.ME_SCHEDULE, {
-            method: 'PUT',
-            body: { slots: staged }
-          })
-        }
+        // 先处理删除（仅对已存在于后端的日期）
         for (const date of this.pendingDeletes) {
-          await apiRequest(API_ENDPOINTS.ME_SCHEDULE_DATE(date), { method: 'DELETE' })
+          await deleteAvailableDateAPI(date)
+        }
+        // 逐个 upsert 暂存的日期（备注各不相同，不合并 batch）
+        for (const slot of Object.values(this.pendingSlots)) {
+          const isFull = slot.status !== 'AVAILABLE'
+          // UNAVAILABLE 统一写 note='休息'，保证读取时能还原状态
+          const note = slot.status === 'UNAVAILABLE' ? '休息' : (slot.note || '')
+          if (this.slots[slot.slot_date]) {
+            await updateAvailableDateAPI(slot.slot_date, isFull, note)
+          } else {
+            // 新增接口只接受 date/note，约满需先添加再更新 is_full
+            await addAvailableDateAPI(slot.slot_date, note)
+            if (isFull) {
+              await updateAvailableDateAPI(slot.slot_date, true, note)
+            }
+          }
         }
         showToast(this.content.scheduleSaved, 'success')
         await this.loadSchedule()
-      } catch {
-        // apiRequest 已提示错误
+      } catch (error) {
+        // 封装层 showError=false，这里统一提示
+        showToast(error.message || this.content.saveFailed, 'error')
       } finally {
         this.scheduleSaving = false
       }
@@ -780,7 +794,7 @@ export default {
 
 .add-thumb {
   height: 100px;
-  border: 1px dashed #E5E5E5;
+  border: 1px dashed var(--border-color);
   background: var(--white);
   border-radius: var(--radius-sm);
   font-size: 1.6rem;
@@ -828,7 +842,7 @@ export default {
 
 .calendar-nav button {
   background: var(--white);
-  border: 1px solid #E5E5E5;
+  border: 1px solid var(--border-color);
   width: 34px;
   height: 34px;
   border-radius: var(--radius-sm);
@@ -911,12 +925,6 @@ export default {
   -webkit-box-orient: vertical;
 }
 
-.day-capacity {
-  margin-top: 2px;
-  font-size: 0.68rem;
-  opacity: 0.8;
-}
-
 .calendar-legend {
   display: flex;
   align-items: center;
@@ -936,7 +944,7 @@ export default {
 .legend-dot {
   width: 12px;
   height: 12px;
-  border-radius: 3px;
+  border-radius: var(--radius);
   display: inline-block;
 }
 
@@ -1007,7 +1015,7 @@ export default {
 .status-option {
   flex: 1;
   padding: 10px;
-  border: 1px solid #E5E5E5;
+  border: 1px solid var(--border-color);
   background: var(--white);
   border-radius: var(--radius-sm);
   cursor: pointer;

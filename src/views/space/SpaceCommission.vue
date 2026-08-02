@@ -808,7 +808,7 @@ ${this.form.details || '无'}`
 
 <style scoped>
 .commission-section {
-  padding: 60px 0;
+  padding: 64px 0;
 }
 
 .commission-steps {
@@ -832,11 +832,11 @@ ${this.form.details || '无'}`
 }
 
 .step-number {
-  width: 50px;
-  height: 50px;
+  width: 48px;
+  height: 48px;
   background: var(--primary-color);
   color: var(--white);
-  border-radius: 50%;
+  border-radius: var(--radius);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -870,7 +870,7 @@ ${this.form.details || '无'}`
 .contact-type {
   width: 100px;
   padding: 12px;
-  border: 1px solid #ddd;
+  border: 1px solid #E5E7EB;
   border-radius: var(--radius-sm);
   background: var(--white);
 }
@@ -882,7 +882,7 @@ ${this.form.details || '无'}`
 /* 日期选择日历 */
 .commission-calendar {
   background: var(--white);
-  border: 1px solid #e0e0e0;
+  border: 1px solid #E5E7EB;
   border-radius: var(--radius);
   padding: 20px;
   margin-top: 10px;
@@ -914,7 +914,7 @@ ${this.form.details || '无'}`
 .commission-calendar__nav-btn {
   width: 32px;
   height: 32px;
-  border: 1px solid #ddd;
+  border: 1px solid #E5E7EB;
   background: var(--white);
   border-radius: var(--radius-sm);
   cursor: pointer;
@@ -974,7 +974,7 @@ ${this.form.details || '无'}`
 }
 
 .commission-calendar__day.is-other-month {
-  color: #ccc;
+  color: var(--text-muted);
   background: transparent;
   cursor: default;
 }
@@ -985,21 +985,20 @@ ${this.form.details || '无'}`
   color: var(--white) !important;
   font-weight: bold;
   box-shadow: 0 0 0 3px rgba(var(--primary-rgb, 59, 130, 246), 0.3);
-  transform: scale(1.05);
   z-index: 1;
 }
 
 /* 未开放的日期（灰色禁用状态） */
 .commission-calendar__day.is-not-opened {
-  background: #f5f5f5;
-  color: #bbb;
+  background: #F3F4F6;
+  color: var(--text-muted);
   cursor: not-allowed;
 }
 
 /* 可预约的日期（绿色可选状态） */
 .commission-calendar__day.is-available {
-  background: #e8f5e9;
-  color: #2e7d32;
+  background: rgba(34, 197, 94, 0.1);
+  color: #15803D;
   cursor: pointer;
 }
 
@@ -1010,8 +1009,8 @@ ${this.form.details || '无'}`
 
 /* 已满的日期（红色禁用状态） */
 .commission-calendar__day.is-full {
-  background: #ffebee;
-  color: #c62828;
+  background: rgba(239, 68, 68, 0.08);
+  color: #DC2626;
   cursor: not-allowed;
 }
 
@@ -1024,20 +1023,20 @@ ${this.form.details || '无'}`
   position: absolute;
   bottom: 2px;
   font-size: 0.6rem;
-  color: #e74c3c;
-  background: #ffebee;
+  color: #DC2626;
+  background: rgba(239, 68, 68, 0.1);
   padding: 0 4px;
   border-radius: 2px;
 }
 
 .commission-calendar__marker--available {
-  color: #2e7d32;
-  background: #c8e6c9;
+  color: #15803D;
+  background: rgba(34, 197, 94, 0.15);
 }
 
 .commission-calendar__marker--full {
-  color: #c62828;
-  background: #ffcdd2;
+  color: #DC2626;
+  background: rgba(239, 68, 68, 0.15);
 }
 
 @media (max-width: 480px) {
@@ -1069,7 +1068,7 @@ ${this.form.details || '无'}`
   background: var(--primary-color);
   color: white;
   padding: 5px 12px;
-  border-radius: 15px;
+  border-radius: var(--radius);
   font-size: 0.85rem;
 }
 
@@ -1139,7 +1138,7 @@ ${this.form.details || '无'}`
   justify-content: space-between;
   align-items: center;
   padding: 20px 30px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid #E5E7EB;
 }
 
 .terms-header h2 {
@@ -1176,7 +1175,7 @@ ${this.form.details || '无'}`
 
 .terms-footer {
   padding: 20px 30px;
-  border-top: 1px solid #eee;
+  border-top: 1px solid #E5E7EB;
   text-align: right;
 }
 
@@ -1205,11 +1204,11 @@ ${this.form.details || '无'}`
 }
 
 .success-icon {
-  width: 70px;
-  height: 70px;
-  background: #d4edda;
-  color: #155724;
-  border-radius: 50%;
+  width: 64px;
+  height: 64px;
+  background: rgba(34, 197, 94, 0.12);
+  color: #15803D;
+  border-radius: var(--radius);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1248,22 +1247,26 @@ ${this.form.details || '无'}`
 }
 
 .btn-chat {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  background: var(--primary-color);
+  color: var(--white);
   border: none;
   padding: 12px 24px;
   border-radius: var(--radius);
   cursor: pointer;
   font-size: 1rem;
-  transition: all 0.3s;
+  transition: var(--transition);
 }
 
 .btn-chat:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  background: var(--accent-color);
+  color: var(--white);
 }
 
 @media (max-width: 768px) {
+  .commission-section {
+    padding: 40px 0;
+  }
+
   .step {
     padding: 25px;
   }
@@ -1296,7 +1299,7 @@ ${this.form.details || '无'}`
 
 .style-option {
   background: var(--white);
-  border: 2px solid #e0e0e0;
+  border: 1px solid #E5E7EB;
   border-radius: var(--radius);
   padding: 15px;
   cursor: pointer;
@@ -1310,7 +1313,7 @@ ${this.form.details || '无'}`
 
 .style-option.selected {
   border-color: var(--primary-color);
-  background: rgba(107, 142, 107, 0.08);
+  background: #FAFAFA;
 }
 
 .style-option img {

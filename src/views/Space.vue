@@ -27,6 +27,7 @@ import { ref, computed, onMounted, watch, provide } from 'vue'
 import { useRoute } from 'vue-router'
 import { apiRequest, eventBus } from '../utils/eventBus.js'
 import { getCurrentUser, isAuthenticated } from '../utils/auth.js'
+import { setViewingPersonalization, configFromBackend } from '../utils/personalization.js'
 
 export default {
   name: 'Space',
@@ -47,6 +48,7 @@ export default {
     const artistData = ref({
       uid: 0,
       slug: '',
+      role: '',
       nickname: '',
       avatar_url: '',
       bio: '',
@@ -64,6 +66,7 @@ export default {
     const DEFAULT_ARTIST_DATA = {
       uid: 0,
       slug: props.slug,
+      role: '',
       nickname: '画师空间',
       avatar_url: '',
       bio: '',
@@ -73,6 +76,7 @@ export default {
       commission_rules: '',
       price_range_min: 0,
       price_range_max: 0,
+      created_at: '',
       page_config: {
         primary_color: '#667eea',
         background_color: '#f8f9fa',
@@ -90,6 +94,30 @@ export default {
         custom_footer: ''
       },
       contact_info: {}
+    }
+
+    // Mock 测试数据（/@demo|test|mock 专用）
+    const MOCK_ARTIST_DATA = {
+      ...DEFAULT_ARTIST_DATA,
+      uid: 0,
+      role: 'ARTIST',
+      nickname: 'Demo 画师',
+      bio: '这是一个前端 Mock 空间，用于无后端环境下预览主页效果。',
+      artist_verified: true,
+      commission_open: true
+    }
+
+    // 将后端空间数据归一化为向后兼容的 artistInfo 结构（缺字段补默认值）
+    const normalizeSpaceData = (data) => {
+      const safe = data && typeof data === 'object' ? data : {}
+      return {
+        ...DEFAULT_ARTIST_DATA,
+        ...safe,
+        slug: safe.slug || props.slug,
+        artist_tags: Array.isArray(safe.artist_tags) ? safe.artist_tags : [],
+        page_config: { ...DEFAULT_ARTIST_DATA.page_config, ...(safe.page_config || {}) },
+        contact_info: safe.contact_info || {}
+      }
     }
     
     // ==================== 计算属性 ====================
@@ -134,6 +162,20 @@ export default {
     
     // ==================== 方法 ====================
     
+    // 拉取空间 DIY 配置并写入运行时（静默失败，空配置忽略）
+    const fetchPageConfig = async () => {
+      try {
+        const raw = await apiRequest(`/api/v1/space/${props.slug}/page-config`, { showError: false })
+        // 成功且返回非空对象时才应用（configFromBackend 对空/异常结构返回 null）
+        const config = configFromBackend(raw)
+        if (config) {
+          setViewingPersonalization(config)
+        }
+      } catch (err) {
+        // 失败/为空时静默忽略，不影响空间展示
+      }
+    }
+    
     // 获取空间数据（支持 Mock 降级）
     const fetchSpaceData = async () => {
       loading.value = true
@@ -145,25 +187,27 @@ export default {
         // 模拟网络延迟，让加载动画更真实
         await new Promise(resolve => setTimeout(resolve, 300))
         artistData.value = { ...MOCK_ARTIST_DATA, slug: props.slug }
+        eventBus.emit('space-artist-loaded', { uid: 0, slug: props.slug, role: MOCK_ARTIST_DATA.role })
         loading.value = false
         return
       }
       
       try {
         const data = await apiRequest(`/api/v1/space/${props.slug}`, { showError: false })
-        artistData.value = data
+        artistData.value = normalizeSpaceData(data)
         error.value = ''
-        // 🔥 通知 Navbar 当前画师 UID，避免私信按钮再次请求 API
-        eventBus.emit('space-artist-loaded', { uid: data.uid || data.id || 0, slug: props.slug })
+        // 🔥 通知 Navbar 当前空间用户 UID/角色，避免私信按钮再次请求 API
+        eventBus.emit('space-artist-loaded', { uid: artistData.value.uid || 0, slug: props.slug, role: artistData.value.role || '' })
+        // 拉取该用户的主页 DIY 配置（访客查看态，静默处理）
+        fetchPageConfig()
       } catch (err) {
         console.error('获取空间数据失败:', err)
         
-        // 判断是否是"该用户未开通画师空间"
-        const errMsg = err?.message || ''
-        if (errMsg.includes('未开通画师空间') || errMsg.includes('画师空间不存在')) {
-          error.value = '该用户未开通画师空间，或空间已被禁用。'
+        // 任何存在且活跃的用户都有主页（含 CLIENT）；只有 404 才代表空间不存在
+        if (err?.status === 404) {
+          error.value = '空间不存在或已被删除。'
         } else if (!import.meta.env.DEV) {
-          error.value = '加载空间失败，请稍后重试。'
+          error.value = '空间加载失败，请稍后重试。'
         }
         
         // ==================== 优雅降级：API 失败时使用 Mock ====================
@@ -173,10 +217,10 @@ export default {
           artistData.value = { 
             ...MOCK_ARTIST_DATA, 
             slug: props.slug,
-            nickname: `${props.slug} 的画师空间`,
+            nickname: `${props.slug} 的空间`,
             bio: `欢迎来到 ${props.slug} 的专属空间！\n（当前使用 Mock 数据，因为后端 API 暂时不可用）`
           }
-          eventBus.emit('space-artist-loaded', { uid: artistData.value.uid, slug: props.slug })
+          eventBus.emit('space-artist-loaded', { uid: artistData.value.uid, slug: props.slug, role: MOCK_ARTIST_DATA.role })
         }
       } finally {
         loading.value = false

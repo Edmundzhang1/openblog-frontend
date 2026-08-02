@@ -171,7 +171,7 @@ export default {
 
 <style scoped>
 .about-section {
-  padding: 60px 0;
+  padding: 64px 0;
   min-height: 100vh;
 }
 
@@ -221,6 +221,10 @@ export default {
 }
 
 @media (max-width: 768px) {
+  .about-section {
+    padding: 40px 0;
+  }
+
   .about-layout {
     grid-template-columns: 1fr;
   }
@@ -242,35 +246,35 @@ export default {
   padding: 12px 16px;
   border: none;
   background: transparent;
-  border-radius: 8px;
+  border-radius: var(--radius);
   cursor: pointer;
   text-align: left;
   font-size: 0.95rem;
   color: var(--text-muted);
-  transition: all 0.3s;
+  transition: var(--transition);
 }
 
 .nav-btn:hover {
-  background: var(--bg-light);
+  background: #F3F4F6;
   color: var(--text-dark);
 }
 
 .nav-btn.active {
   background: var(--primary-color);
-  color: white;
+  color: var(--white);
 }
 
 .about-content {
   background: var(--white);
   padding: 40px;
-  border-radius: 16px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  border-radius: var(--radius);
+  border: 1px solid #E5E7EB;
 }
 
 .about-content-section h2 {
   margin-bottom: 24px;
   padding-bottom: 12px;
-  border-bottom: 2px solid var(--bg-light);
+  border-bottom: 1px solid #E5E7EB;
 }
 
 .timeline {
@@ -325,8 +329,8 @@ export default {
   display: flex;
   gap: 16px;
   padding: 20px;
-  background: var(--bg-light);
-  border-radius: 12px;
+  background: #FAFAFA;
+  border-radius: var(--radius);
 }
 
 .item-icon {
@@ -348,8 +352,8 @@ export default {
 .team-card {
   text-align: center;
   padding: 24px;
-  background: var(--bg-light);
-  border-radius: 12px;
+  background: #FAFAFA;
+  border-radius: var(--radius);
 }
 
 .team-avatar {
@@ -373,23 +377,4 @@ export default {
   color: var(--text-dark);
 }
 
-.btn {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  transition: all 0.3s;
-}
-
-.btn-outline {
-  background: transparent;
-  border: 1px solid var(--primary-color);
-  color: var(--primary-color);
-}
-
-.btn-outline:hover {
-  background: var(--primary-color);
-  color: white;
-}
 </style>

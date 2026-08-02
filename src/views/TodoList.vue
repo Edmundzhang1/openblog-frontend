@@ -1,5 +1,5 @@
 <template>
-  <div class="todo-page">
+  <div class="todo-page fade-in">
     <!-- 页面标题 -->
     <header class="page-header">
       <div class="container">
@@ -70,6 +70,8 @@
           <!-- 设置面板 -->
           <div class="settings-section">
             <h3>⚙️ 工作设置</h3>
+            <div v-if="dataLoading" class="loading-state">{{ tt('加载中...', 'Loading...') }}</div>
+            <template v-else>
             <div class="setting-item">
               <label>每日最大工作量（天）</label>
               <input 
@@ -97,6 +99,7 @@
               </div>
               <button class="btn-add-style" @click="openStyleModal">+ 添加画风</button>
             </div>
+            </template>
           </div>
 
           <!-- 选中日期信息 -->
@@ -111,6 +114,18 @@
                 ></div>
               </div>
               <div class="workload-text">{{ currentWorkload.toFixed(1) }}/{{ maxWorkload }}</div>
+            </div>
+            <!-- 当日留言（/todo/notes，公开展示；本地模式不启用） -->
+            <div v-if="!useLocalFallback" class="date-note">
+              <label>📝 {{ tt('当日留言', 'Daily note') }}</label>
+              <textarea
+                v-model="noteContent"
+                rows="2"
+                :placeholder="tt('给当天留一句话（会在你的主页公开展示）', 'A note for this day (shown publicly on your page)')"
+                :disabled="noteLoading || noteSaving"
+                @blur="saveNote"
+              ></textarea>
+              <small class="note-status" v-if="noteSaving">{{ tt('保存中...', 'Saving...') }}</small>
             </div>
           </div>
           <div class="date-info" v-else>
@@ -225,7 +240,9 @@
             <label>颜色标识</label>
             <input type="color" v-model="styleForm.color">
           </div>
-          <button type="submit" class="btn-primary">保存</button>
+          <button type="submit" class="btn-primary" :disabled="savingStyle">
+            {{ savingStyle ? tt('保存中...', 'Saving...') : '保存' }}
+          </button>
         </form>
       </div>
     </div>
@@ -268,7 +285,21 @@
 </template>
 
 <script>
+import { inject } from 'vue'
+import { showToast } from '../utils/eventBus.js'
+import {
+  getWorkloadAPI,
+  updateWorkloadAPI,
+  getArtStylesAPI,
+  createArtStyleAPI,
+  updateArtStyleAPI,
+  deleteArtStyleAPI,
+  getDailyNoteAPI,
+  saveDailyNoteAPI
+} from '../api/todo.js'
+
 const STORAGE_KEYS = {
+  // 画风/工作量已迁移到 /api/v1/todo/*；STYLES/MAX_WORKLOAD 仅作 403 回退（本地模式）使用
   STYLES: 'furest_vue_styles',
   MAX_WORKLOAD: 'furest_vue_max_workload',
   COMMISSIONS: 'furest_vue_commissions',
@@ -284,12 +315,26 @@ const defaultStyles = [
 
 export default {
   name: 'TodoList',
+  setup() {
+    return { i18n: inject('i18n', { getLocale: () => 'zh' }) }
+  },
   data() {
     return {
       // 核心数据
       styles: [],
       maxWorkload: 3,
       commissions: [],
+      // 服务端 workload 完整配置（PUT 为整体 upsert，需回传其它字段避免被清空）
+      workloadConfig: null,
+      // 403（无画师权限）时回退 localStorage 本地模式
+      useLocalFallback: false,
+      dataLoading: false,
+      savingStyle: false,
+      // 当日留言（/todo/notes）
+      noteContent: '',
+      savedNoteContent: '',
+      noteLoading: false,
+      noteSaving: false,
       
       // 日历状态
       currentDate: new Date(),
@@ -309,7 +354,7 @@ export default {
         id: null,
         name: '',
         days: 1,
-        color: '#6B8E6B'
+        color: '#3B82F6'
       },
       
       // UI 状态
@@ -444,20 +489,62 @@ export default {
   },
   
   methods: {
-    loadData() {
-      const styles = localStorage.getItem(STORAGE_KEYS.STYLES)
-      const maxWorkload = localStorage.getItem(STORAGE_KEYS.MAX_WORKLOAD)
+    // 双语助手：新增文案统一走 tt(zh, en)
+    tt(zh, en) {
+      return this.i18n.getLocale() === 'zh' ? zh : en
+    },
+
+    async loadData() {
+      // 客户排单保持 localStorage（后端无对应接口）
+      this.loadCommissions()
+      this.dataLoading = true
+      try {
+        const [workloadRes, stylesRes] = await Promise.all([getWorkloadAPI(), getArtStylesAPI()])
+        const config = workloadRes?.data || {}
+        this.workloadConfig = config
+        this.maxWorkload = Number(config.max_workload) || 3
+        // 后端字段与 UI 对齐：id/name/days/color
+        this.styles = Array.isArray(stylesRes?.data) ? stylesRes.data : []
+      } catch (error) {
+        if (error.status === 403) {
+          // 无画师权限：回退 localStorage 本地模式
+          this.useLocalFallback = true
+          showToast(this.tt('当前账号无画师权限，已切换为本地模式', 'No artist permission; switched to local mode'), 'warning')
+        } else {
+          showToast(error.message || this.tt('工作设置加载失败', 'Failed to load settings'), 'error')
+        }
+        this.loadLocalConfig()
+      } finally {
+        this.dataLoading = false
+      }
+    },
+    
+    // 客户排单：localStorage 读写（后端无对应接口，保持不动）
+    loadCommissions() {
       const commissions = localStorage.getItem(STORAGE_KEYS.COMMISSIONS)
-      
-      this.styles = styles ? JSON.parse(styles) : [...defaultStyles]
-      this.maxWorkload = maxWorkload ? parseFloat(maxWorkload) : 3
       this.commissions = commissions ? JSON.parse(commissions) : []
     },
     
-    saveData() {
+    saveCommissions() {
+      localStorage.setItem(STORAGE_KEYS.COMMISSIONS, JSON.stringify(this.commissions))
+    },
+    
+    // 本地模式（403 回退）：画风/工作量仍走 localStorage
+    loadLocalConfig() {
+      const styles = localStorage.getItem(STORAGE_KEYS.STYLES)
+      const maxWorkload = localStorage.getItem(STORAGE_KEYS.MAX_WORKLOAD)
+      this.styles = styles ? JSON.parse(styles) : [...defaultStyles]
+      this.maxWorkload = maxWorkload ? parseFloat(maxWorkload) : 3
+    },
+    
+    saveLocalConfig() {
       localStorage.setItem(STORAGE_KEYS.STYLES, JSON.stringify(this.styles))
       localStorage.setItem(STORAGE_KEYS.MAX_WORKLOAD, this.maxWorkload)
-      localStorage.setItem(STORAGE_KEYS.COMMISSIONS, JSON.stringify(this.commissions))
+    },
+    
+    async reloadStyles() {
+      const res = await getArtStylesAPI()
+      this.styles = Array.isArray(res?.data) ? res.data : []
     },
     
     checkFirstTime() {
@@ -477,6 +564,7 @@ export default {
       this.selectedDate = dateStr
       this.newCommission = { clientName: '', styleId: '', quantity: 1, note: '' }
       this.showOverloadWarning = false
+      this.loadNote()
     },
     
     calculateDayWorkload(commissions) {
@@ -517,7 +605,7 @@ export default {
       }
       
       this.commissions.push(commission)
-      this.saveData()
+      this.saveCommissions()
       this.newCommission = { clientName: '', styleId: '', quantity: 1, note: '' }
       this.showOverloadWarning = false
     },
@@ -525,13 +613,13 @@ export default {
     deleteCommission(id) {
       if (confirm('确定删除这个排单吗？')) {
         this.commissions = this.commissions.filter(c => c.id !== id)
-        this.saveData()
+        this.saveCommissions()
       }
     },
     
     toggleStatus(commission) {
       commission.status = commission.status === 'completed' ? 'pending' : 'completed'
-      this.saveData()
+      this.saveCommissions()
     },
     
     checkOverload() {
@@ -549,7 +637,7 @@ export default {
     
     // 画风管理
     openStyleModal() {
-      this.styleForm = { id: null, name: '', days: 1, color: '#6B8E6B' }
+      this.styleForm = { id: null, name: '', days: 1, color: '#3B82F6' }
       this.editingStyle = null
       this.showStyleModal = true
     },
@@ -570,37 +658,115 @@ export default {
       }
     },
     
-    saveStyle() {
-      if (this.editingStyle) {
-        const index = this.styles.findIndex(s => s.id === this.styleForm.id)
-        this.styles[index] = { ...this.styleForm }
-      } else {
-        this.styles.push({
-          ...this.styleForm,
-          id: Date.now()
-        })
+    async saveStyle() {
+      const payload = {
+        name: this.styleForm.name,
+        days: this.styleForm.days,
+        color: this.styleForm.color
       }
-      this.saveData()
-      this.closeStyleModal()
+      // 本地模式：保持原 localStorage 行为
+      if (this.useLocalFallback) {
+        if (this.editingStyle) {
+          const index = this.styles.findIndex(s => s.id === this.styleForm.id)
+          if (index !== -1) this.styles[index] = { ...this.styleForm }
+        } else {
+          this.styles.push({ ...this.styleForm, id: Date.now() })
+        }
+        this.saveLocalConfig()
+        this.closeStyleModal()
+        return
+      }
+      this.savingStyle = true
+      try {
+        if (this.editingStyle) {
+          await updateArtStyleAPI(this.styleForm.id, payload)
+        } else {
+          await createArtStyleAPI(payload)
+        }
+        await this.reloadStyles()
+        this.closeStyleModal()
+      } catch (error) {
+        showToast(error.message || this.tt('画风保存失败', 'Failed to save style'), 'error')
+      } finally {
+        this.savingStyle = false
+      }
     },
     
-    deleteStyle(id) {
-      if (confirm('确定删除这个画风吗？相关的排单数据将保留但显示为未知画风。')) {
+    async deleteStyle(id) {
+      if (!confirm('确定删除这个画风吗？相关的排单数据将保留但显示为未知画风。')) return
+      // 本地模式：保持原 localStorage 行为
+      if (this.useLocalFallback) {
         this.styles = this.styles.filter(s => s.id !== id)
-        this.saveData()
+        this.saveLocalConfig()
+        return
+      }
+      try {
+        await deleteArtStyleAPI(id)
+        this.styles = this.styles.filter(s => s.id !== id)
+      } catch (error) {
+        showToast(error.message || this.tt('画风删除失败', 'Failed to delete style'), 'error')
       }
     },
     
     // 设置
-    saveSetup() {
+    async saveSetup() {
       this.maxWorkload = this.setupMaxWorkload
-      this.saveData()
+      await this.updateMaxWorkload()
       this.showSetupModal = false
       this.openStyleModal()
     },
     
-    updateMaxWorkload() {
-      this.saveData()
+    async updateMaxWorkload() {
+      if (this.useLocalFallback) {
+        this.saveLocalConfig()
+        return
+      }
+      try {
+        // PUT 为整体 upsert：回传已有公告配置，避免 queue_status 等字段被清空
+        const cfg = this.workloadConfig || {}
+        const res = await updateWorkloadAPI(this.maxWorkload, {
+          queueStatus: cfg.queue_status,
+          queueDesc: cfg.queue_desc,
+          bookingStatus: cfg.booking_status,
+          bookingDesc: cfg.booking_desc,
+          nextAvailableDate: cfg.next_available_date
+        })
+        this.workloadConfig = res?.data || this.workloadConfig
+      } catch (error) {
+        showToast(error.message || this.tt('工作量保存失败', 'Failed to save workload'), 'error')
+      }
+    },
+    
+    // 当日留言（/todo/notes）
+    async loadNote() {
+      this.noteContent = ''
+      this.savedNoteContent = ''
+      if (!this.selectedDate || this.useLocalFallback) return
+      this.noteLoading = true
+      try {
+        const res = await getDailyNoteAPI(this.selectedDate)
+        this.noteContent = res?.data?.content || ''
+        this.savedNoteContent = this.noteContent
+      } catch (error) {
+        showToast(error.message || this.tt('留言加载失败', 'Failed to load note'), 'error')
+      } finally {
+        this.noteLoading = false
+      }
+    },
+    
+    async saveNote() {
+      if (this.useLocalFallback || !this.selectedDate) return
+      if (this.noteContent === this.savedNoteContent) return
+      this.noteSaving = true
+      try {
+        await saveDailyNoteAPI(this.selectedDate, this.noteContent)
+        this.savedNoteContent = this.noteContent
+        showToast(this.tt('留言已保存', 'Note saved'), 'success')
+      } catch (error) {
+        showToast(error.message || this.tt('留言保存失败', 'Failed to save note'), 'error')
+      } finally {
+        this.noteSaving = false
+      }
     },
     
     // 统计
@@ -618,30 +784,12 @@ export default {
 </script>
 
 <style scoped>
-/* 页面标题 */
-.page-header {
-  background: linear-gradient(135deg, var(--primary-color) 0%, var(--accent-color) 100%);
-  color: var(--white);
-  padding: 60px 0;
-  text-align: center;
-}
-
-.page-header h1 {
-  font-size: 2.5rem;
-  margin-bottom: 10px;
-}
-
-.page-header p {
-  font-size: 1.1rem;
-  opacity: 0.9;
-}
-
 /* 统计卡片 */
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 20px;
-  margin: 30px auto;
+  margin: 48px auto;
   max-width: 1400px;
   padding: 0 20px;
 }
@@ -686,7 +834,7 @@ export default {
 .calendar-section {
   background: var(--white);
   border-radius: var(--radius);
-  padding: 25px;
+  padding: 32px;
   box-shadow: var(--shadow);
 }
 
@@ -708,7 +856,7 @@ export default {
 }
 
 .calendar-nav button {
-  background: var(--bg-light);
+  background: #F5F5F5;
   border: none;
   width: 36px;
   height: 36px;
@@ -753,13 +901,12 @@ export default {
 }
 
 .calendar-day:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow);
+  background: #FAFAFA;
 }
 
 .calendar-day.other-month {
   color: var(--text-muted);
-  background: var(--bg-light);
+  background: #FAFAFA;
   opacity: 0.5;
   cursor: default;
 }
@@ -771,19 +918,19 @@ export default {
 
 .calendar-day.selected {
   border-color: var(--accent-color);
-  box-shadow: 0 0 0 3px rgba(212, 165, 116, 0.3);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
 
 .calendar-day.status-free {
-  background: #F0FFF0;
+  background: #F0FDF4;
 }
 
 .calendar-day.status-busy {
-  background: #FFFACD;
+  background: #FFFBEB;
 }
 
 .calendar-day.status-overload {
-  background: #FFE4E1;
+  background: #FEF2F2;
 }
 
 .day-number {
@@ -824,7 +971,7 @@ export default {
 .add-commission {
   background: var(--white);
   border-radius: var(--radius);
-  padding: 20px;
+  padding: 32px;
   box-shadow: var(--shadow);
 }
 
@@ -852,7 +999,7 @@ export default {
 .setting-item input[type="number"] {
   width: 100%;
   padding: 10px 15px;
-  border: 1px solid #ddd;
+  border: 1px solid #E5E7EB;
   border-radius: var(--radius-sm);
   font-size: 1rem;
 }
@@ -870,7 +1017,7 @@ export default {
   gap: 10px;
   align-items: center;
   padding: 12px;
-  background: var(--bg-light);
+  background: #FAFAFA;
   border-radius: var(--radius-sm);
 }
 
@@ -914,8 +1061,8 @@ export default {
 }
 
 .btn-delete {
-  background: #ffebee;
-  color: #c62828;
+  background: #FEF2F2;
+  color: #B91C1C;
 }
 
 .btn-add-style {
@@ -944,20 +1091,20 @@ export default {
 .workload-progress {
   flex: 1;
   height: 12px;
-  background: var(--bg-light);
-  border-radius: 6px;
+  background: #F5F5F5;
+  border-radius: var(--radius);
   overflow: hidden;
 }
 
 .workload-fill {
   height: 100%;
-  border-radius: 6px;
+  border-radius: var(--radius);
   transition: width 0.3s ease;
 }
 
-.workload-fill.free { background: #6B8E6B; }
-.workload-fill.busy { background: #D4A574; }
-.workload-fill.overload { background: #E57373; }
+.workload-fill.free { background: #34D399; }
+.workload-fill.busy { background: #FBBF24; }
+.workload-fill.overload { background: #F87171; }
 
 .workload-text {
   font-size: 0.95rem;
@@ -968,7 +1115,7 @@ export default {
 
 /* 排单项 */
 .commission-item {
-  background: var(--bg-light);
+  background: #FAFAFA;
   border-radius: var(--radius-sm);
   padding: 15px;
   margin-bottom: 12px;
@@ -991,7 +1138,7 @@ export default {
   align-items: center;
   gap: 6px;
   padding: 4px 10px;
-  border-radius: 12px;
+  border-radius: var(--radius);
   font-size: 0.8rem;
   font-weight: 500;
 }
@@ -1039,8 +1186,8 @@ export default {
 }
 
 .btn-status.completed {
-  background: #d4edda;
-  color: #155724;
+  background: #F0FDF4;
+  color: #15803D;
 }
 
 /* 表单 */
@@ -1060,7 +1207,7 @@ export default {
 .form-group textarea {
   width: 100%;
   padding: 10px 15px;
-  border: 1px solid #ddd;
+  border: 1px solid #E5E7EB;
   border-radius: var(--radius-sm);
   font-size: 0.95rem;
   font-family: inherit;
@@ -1070,7 +1217,7 @@ export default {
 .form-group select:focus,
 .form-group textarea:focus {
   outline: none;
-  border-color: var(--primary-color);
+  border-color: var(--accent-color);
 }
 
 .form-row {
@@ -1206,16 +1353,56 @@ export default {
   font-size: 0.9rem;
 }
 
+/* 加载态 */
+.loading-state {
+  padding: 24px 0;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+/* 当日留言 */
+.date-note {
+  margin-top: 15px;
+}
+
+.date-note label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.9rem;
+  color: var(--text-dark);
+}
+
+.date-note textarea {
+  width: 100%;
+  padding: 10px 15px;
+  border: 1px solid #E5E7EB;
+  border-radius: var(--radius-sm);
+  font-size: 0.95rem;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.date-note textarea:focus {
+  outline: none;
+  border-color: var(--accent-color);
+}
+
+.note-status {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-light);
+}
+
 .alert-warning {
-  background: #fff3cd;
-  color: #856404;
-  border: 1px solid #ffeaa7;
+  background: #FFFBEB;
+  color: #B45309;
+  border: 1px solid #FDE68A;
 }
 
 .alert-info {
-  background: #d1ecf1;
-  color: #0c5460;
-  border: 1px solid #bee5eb;
+  background: #EFF6FF;
+  color: #1D4ED8;
+  border: 1px solid #BFDBFE;
 }
 
 /* 响应式 */

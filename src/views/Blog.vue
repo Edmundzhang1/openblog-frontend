@@ -1,6 +1,6 @@
 <template>
   <div class="blog">
-    <header class="page-header">
+    <header class="page-header fade-in">
       <div class="container">
         <h1>{{ content.title }}</h1>
         <p>{{ content.subtitle }}</p>
@@ -298,7 +298,7 @@ export default {
 
 <style scoped>
 .blog-section {
-  padding: 60px 0;
+  padding: 64px 0;
 }
 
 .blog-tabs {
@@ -310,10 +310,11 @@ export default {
 }
 
 .blog-tab {
-  padding: 10px 25px;
+  padding: 10px 24px;
   border: none;
-  background: var(--bg-light);
-  border-radius: 25px;
+  background: var(--secondary-color);
+  color: var(--text-light);
+  border-radius: var(--radius);
   cursor: pointer;
   transition: var(--transition);
   font-size: 1rem;
@@ -347,7 +348,6 @@ export default {
 }
 
 .blog-card:hover {
-  transform: translateY(-5px);
   box-shadow: var(--shadow-hover);
 }
 
@@ -361,11 +361,6 @@ export default {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: var(--transition);
-}
-
-.blog-card:hover .blog-image img {
-  transform: scale(1.05);
 }
 
 .blog-category {
@@ -375,7 +370,7 @@ export default {
   background: var(--primary-color);
   color: var(--white);
   padding: 5px 15px;
-  border-radius: 15px;
+  border-radius: var(--radius);
   font-size: 0.85rem;
 }
 
@@ -472,7 +467,7 @@ export default {
   background: var(--primary-color);
   color: var(--white);
   padding: 5px 15px;
-  border-radius: 15px;
+  border-radius: var(--radius);
   font-size: 0.85rem;
   margin-bottom: 15px;
 }
@@ -523,7 +518,7 @@ export default {
 .post-contact {
   margin-top: 40px;
   padding-top: 30px;
-  border-top: 2px solid var(--bg-light);
+  border-top: 1px solid var(--border-color);
   text-align: center;
 }
 

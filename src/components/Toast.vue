@@ -48,7 +48,7 @@ export default {
   background: var(--text-dark);
   color: var(--white);
   padding: 15px 30px;
-  border-radius: 30px;
+  border-radius: var(--radius);
   z-index: 4000;
   opacity: 0;
   transition: all 0.3s ease;

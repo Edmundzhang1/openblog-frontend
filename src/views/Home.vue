@@ -380,7 +380,7 @@ export default {
 }
 
 .more-link:hover {
-  color: var(--primary-color);
+  color: var(--accent-color);
 }
 
 /* 约稿流程 */

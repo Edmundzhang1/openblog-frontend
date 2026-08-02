@@ -1,5 +1,5 @@
 <template>
-  <div class="personalization-page">
+  <div class="personalization-page fade-in">
     <!-- v2 SaaS适配：权限检查 -->
     <div v-if="!canEdit" class="permission-denied">
       <div class="container">
@@ -360,6 +360,120 @@
                 <button class="btn btn-outline btn-add" @click="addSlide">
                   {{ copy.hero.add }}
                 </button>
+              </div>
+            </div>
+          </section>
+
+          <!-- 页面布局设置 -->
+          <section v-if="currentTab === 'layout'" class="settings-section">
+            <h2>{{ copy.layout.section }}</h2>
+
+            <!-- 模块显隐 -->
+            <div class="setting-card">
+              <h3>{{ copy.layout.modulesTitle }}</h3>
+              <p class="section-note">{{ copy.layout.modulesDesc }}</p>
+              <div class="layout-modules">
+                <label v-for="mod in layoutModuleList" :key="mod.key" class="toggle-switch">
+                  <input type="checkbox" v-model="config.modules[mod.key]">
+                  <span class="toggle-slider"></span>
+                  <span class="toggle-label">{{ mod.label }}</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- 模块排序 -->
+            <div class="setting-card">
+              <h3>{{ copy.layout.orderTitle }}</h3>
+              <p class="section-note">{{ copy.layout.orderDesc }}</p>
+              <div class="layout-order-list">
+                <div v-for="(key, index) in config.sectionOrder" :key="key" class="layout-order-item">
+                  <span class="layout-order-name">{{ copy.layout.orderNames[key] || key }}</span>
+                  <div class="layout-order-actions">
+                    <button class="btn btn-sm btn-outline" :disabled="index === 0" @click="moveSection(index, -1)">
+                      ↑ {{ copy.layout.moveUp }}
+                    </button>
+                    <button class="btn btn-sm btn-outline" :disabled="index === config.sectionOrder.length - 1" @click="moveSection(index, 1)">
+                      ↓ {{ copy.layout.moveDown }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 内容置顶 -->
+            <div class="setting-card">
+              <h3>{{ copy.layout.pinnedTitle }}</h3>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label>{{ copy.layout.pinnedMoment }}</label>
+                  <select v-model="config.pinned.momentId">
+                    <option :value="null">{{ copy.layout.pinnedNone }}</option>
+                    <option v-for="moment in moments" :key="moment.id" :value="moment.id">
+                      {{ moment.title || (moment.content || '').slice(0, 20) }}
+                    </option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>{{ copy.layout.pinnedWork }}</label>
+                  <select v-model="config.pinned.workId">
+                    <option :value="null">{{ copy.layout.pinnedNone }}</option>
+                    <option v-for="work in config.gallery.works" :key="work.id" :value="work.id">
+                      {{ work.title }}
+                    </option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- 自定义板块 -->
+            <div class="setting-card">
+              <h3>{{ copy.layout.sectionsTitle }}</h3>
+              <p class="section-note">{{ copy.layout.sectionsDesc }}</p>
+              <div class="custom-section-list">
+                <div v-for="(section, index) in config.customSections" :key="section.id" class="custom-section-item">
+                  <label class="toggle-switch">
+                    <input type="checkbox" v-model="section.enabled">
+                    <span class="toggle-slider"></span>
+                    <span class="toggle-label">{{ section.title || copy.layout.sectionTitlePlaceholder }}</span>
+                  </label>
+                  <div class="layout-order-actions">
+                    <button class="btn btn-sm btn-outline" :disabled="index === 0" @click="moveCustomSection(index, -1)">↑</button>
+                    <button class="btn btn-sm btn-outline" :disabled="index === config.customSections.length - 1" @click="moveCustomSection(index, 1)">↓</button>
+                    <button class="btn btn-sm btn-outline" @click="startEditCustomSection(section)">{{ copy.layout.editSection }}</button>
+                    <button class="btn btn-small btn-danger" @click="removeCustomSection(index)">{{ copy.actions.deleteTitle }}</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 板块编辑器 -->
+              <div v-if="editingCustomSection" class="custom-section-editor">
+                <div class="form-group">
+                  <label>{{ copy.layout.sectionTitleLabel }}</label>
+                  <input v-model="customSectionForm.title" :placeholder="copy.layout.sectionTitlePlaceholder">
+                </div>
+                <div class="form-group">
+                  <label>{{ copy.layout.sectionContentLabel }}</label>
+                  <textarea v-model="customSectionForm.content" rows="6" :placeholder="copy.layout.sectionContentPlaceholder"></textarea>
+                  <p class="hint">{{ copy.layout.htmlHint }}</p>
+                </div>
+                <div class="action-row">
+                  <button class="btn btn-outline" @click="cancelEditCustomSection">{{ copy.layout.cancelEdit }}</button>
+                  <button class="btn btn-primary" @click="saveCustomSection">{{ copy.layout.saveSection }}</button>
+                </div>
+              </div>
+
+              <button v-if="!editingCustomSection" class="btn btn-outline btn-add" @click="startAddCustomSection">
+                {{ copy.layout.addSection }}
+              </button>
+            </div>
+
+            <!-- 自定义 CSS -->
+            <div class="setting-card">
+              <h3>{{ copy.layout.cssTitle }}</h3>
+              <p class="section-note">{{ copy.layout.cssDesc }}</p>
+              <div class="form-group">
+                <textarea v-model="config.customCSS" rows="8" class="custom-css-input" :placeholder="copy.layout.cssPlaceholder"></textarea>
+                <p class="hint hint-warning">{{ copy.layout.cssWarning }}</p>
               </div>
             </div>
           </section>
@@ -912,7 +1026,9 @@ import {
   availablePlatforms,
   siteFontOptions,
   configToBackend,
-  configFromBackend
+  configFromBackend,
+  sanitizeHTML,
+  sanitizeCSS
 } from '../utils/personalization.js'
 import { showToast, apiRequest } from '../utils/eventBus.js'
 import Toast from '../components/Toast.vue'
@@ -936,6 +1052,7 @@ const PERSONALIZATION_MESSAGES = {
       profile: '个人信息',
       theme: '主题配色',
       hero: '首页轮播',
+      layout: '页面布局',
       background: '页面背景',
       gallery: '作品展示',
       site: '站点信息',
@@ -999,6 +1116,54 @@ const PERSONALIZATION_MESSAGES = {
       add: '+ 添加轮播图',
       newTitle: '新轮播图',
       newDesc: '点击编辑描述文字'
+    },
+    layout: {
+      section: '🧩 页面布局',
+      modulesTitle: '模块显隐',
+      modulesDesc: '控制主页各模块是否展示',
+      moduleNames: {
+        hero: '首页轮播',
+        gallery: '作品画廊',
+        moments: '动态',
+        about: '关于入口',
+        contact: '联系入口',
+        calendar: '排单日历',
+        commission: '约稿入口'
+      },
+      orderTitle: '模块排序',
+      orderDesc: '调整主页各模块的显示顺序（custom 代表自定义板块区）',
+      orderNames: {
+        hero: '首页轮播',
+        gallery: '作品画廊',
+        calendar: '排单日历',
+        moments: '动态',
+        about: '关于入口',
+        contact: '联系入口',
+        custom: '自定义板块'
+      },
+      moveUp: '上移',
+      moveDown: '下移',
+      pinnedTitle: '内容置顶',
+      pinnedMoment: '置顶动态',
+      pinnedWork: '置顶作品',
+      pinnedNone: '不置顶',
+      sectionsTitle: '自定义板块',
+      sectionsDesc: '在主页添加自定义内容板块，可在上方「模块排序」中调整位置',
+      sectionTitleLabel: '板块标题',
+      sectionTitlePlaceholder: '板块标题',
+      sectionContentLabel: '板块内容',
+      sectionContentPlaceholder: '支持 <p><b><i><u><a><ul><ol><li><h3><h4><blockquote><br><img> 等常用标签',
+      htmlHint: '支持常用 HTML 标签，保存时会自动过滤不安全内容',
+      addSection: '+ 添加板块',
+      editSection: '编辑',
+      saveSection: '保存板块',
+      cancelEdit: '取消',
+      deleteConfirm: '确定删除这个自定义板块吗？',
+      emptyContent: '标题和内容不能同时为空',
+      cssTitle: '自定义 CSS',
+      cssDesc: '仅作用于你的主页',
+      cssPlaceholder: '例如：.hero-section { padding-top: 32px; }',
+      cssWarning: '⚠️ 自定义 CSS 可能破坏页面布局，请谨慎使用；保存时会自动过滤危险内容'
     },
     background: {
       section: '🌅 页面背景',
@@ -1188,11 +1353,13 @@ const PERSONALIZATION_MESSAGES = {
       profile: 'Profile',
       theme: 'Theme',
       hero: 'Hero',
+      layout: 'Layout',
       background: 'Background',
       gallery: 'Gallery',
       site: 'Site',
       about: 'About',
-      moments: 'Moments'
+      moments: 'Moments',
+      contact: 'Contact'
     },
     actions: {
       save: '💾 Save Settings',
@@ -1250,6 +1417,54 @@ const PERSONALIZATION_MESSAGES = {
       add: '+ Add Slide',
       newTitle: 'New Slide',
       newDesc: 'Click to edit the description'
+    },
+    layout: {
+      section: '🧩 Layout',
+      modulesTitle: 'Module Visibility',
+      modulesDesc: 'Choose which modules appear on your homepage',
+      moduleNames: {
+        hero: 'Hero Carousel',
+        gallery: 'Gallery',
+        moments: 'Moments',
+        about: 'About Link',
+        contact: 'Contact Link',
+        calendar: 'Schedule Calendar',
+        commission: 'Commission Entry'
+      },
+      orderTitle: 'Module Order',
+      orderDesc: 'Reorder the modules on your homepage ("custom" is the custom sections area)',
+      orderNames: {
+        hero: 'Hero Carousel',
+        gallery: 'Gallery',
+        calendar: 'Schedule Calendar',
+        moments: 'Moments',
+        about: 'About Link',
+        contact: 'Contact Link',
+        custom: 'Custom Sections'
+      },
+      moveUp: 'Up',
+      moveDown: 'Down',
+      pinnedTitle: 'Pinned Content',
+      pinnedMoment: 'Pinned Moment',
+      pinnedWork: 'Pinned Work',
+      pinnedNone: 'None',
+      sectionsTitle: 'Custom Sections',
+      sectionsDesc: 'Add custom content sections to your homepage; reorder them via "Module Order" above',
+      sectionTitleLabel: 'Section Title',
+      sectionTitlePlaceholder: 'Section title',
+      sectionContentLabel: 'Section Content',
+      sectionContentPlaceholder: 'Common tags supported: <p><b><i><u><a><ul><ol><li><h3><h4><blockquote><br><img>',
+      htmlHint: 'Common HTML tags are supported. Unsafe content is stripped on save.',
+      addSection: '+ Add Section',
+      editSection: 'Edit',
+      saveSection: 'Save Section',
+      cancelEdit: 'Cancel',
+      deleteConfirm: 'Delete this custom section?',
+      emptyContent: 'Title and content cannot both be empty',
+      cssTitle: 'Custom CSS',
+      cssDesc: 'Only applies to your own homepage',
+      cssPlaceholder: 'e.g. .hero-section { padding-top: 32px; }',
+      cssWarning: '⚠️ Custom CSS may break the page layout. Use with caution; dangerous content is stripped on save.'
     },
     background: {
       section: '🌅 Page Background',
@@ -1525,6 +1740,7 @@ export default {
       { id: 'profile', name: copy.value.tabs.profile, icon: '👤' },
       { id: 'theme', name: copy.value.tabs.theme, icon: '🎨' },
       { id: 'hero', name: copy.value.tabs.hero, icon: '🖼️' },
+      { id: 'layout', name: copy.value.tabs.layout, icon: '🧩' },
       { id: 'background', name: copy.value.tabs.background, icon: '🌅' },
       { id: 'gallery', name: copy.value.tabs.gallery, icon: '🎨' },
       { id: 'site', name: copy.value.tabs.site, icon: '🌐' },
@@ -1583,6 +1799,93 @@ export default {
         { platform: 'weibo', url: config.profile.social?.weibo || '', icon: '📝', name: '微博' },
         { platform: 'bilibili', url: config.profile.social?.bilibili || '', icon: '📺', name: 'Bilibili' }
       ]
+    }
+
+    // ========== 布局（模块显隐/排序/置顶/自定义板块/自定义CSS） ==========
+    const layoutModuleKeys = ['hero', 'gallery', 'moments', 'about', 'contact', 'calendar', 'commission']
+    const DEFAULT_SECTION_ORDER = ['hero', 'gallery', 'calendar', 'moments', 'about', 'contact', 'custom']
+
+    // 布局字段兼容旧数据
+    if (!config.modules || typeof config.modules !== 'object') config.modules = {}
+    layoutModuleKeys.forEach(key => {
+      if (typeof config.modules[key] !== 'boolean') config.modules[key] = true
+    })
+    if (!Array.isArray(config.sectionOrder) || config.sectionOrder.length === 0) {
+      config.sectionOrder = [...DEFAULT_SECTION_ORDER]
+    }
+    if (!Array.isArray(config.customSections)) config.customSections = []
+    config.customSections = config.customSections.map(section => ({
+      id: section.id || `cs_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      title: section.title || '',
+      content: section.content || '',
+      enabled: section.enabled !== false
+    }))
+    if (!config.pinned || typeof config.pinned !== 'object') {
+      config.pinned = { momentId: null, workId: null }
+    }
+    if (typeof config.customCSS !== 'string') config.customCSS = ''
+
+    const layoutModuleList = computed(() => layoutModuleKeys.map(key => ({
+      key,
+      label: copy.value.layout.moduleNames[key] || key
+    })))
+
+    const moveSection = (index, delta) => {
+      const next = index + delta
+      if (next < 0 || next >= config.sectionOrder.length) return
+      const [item] = config.sectionOrder.splice(index, 1)
+      config.sectionOrder.splice(next, 0, item)
+    }
+
+    // 自定义板块编辑
+    const editingCustomSection = ref(null) // 'new' 或板块 id
+    const customSectionForm = reactive({ title: '', content: '' })
+
+    const startAddCustomSection = () => {
+      customSectionForm.title = ''
+      customSectionForm.content = ''
+      editingCustomSection.value = 'new'
+    }
+
+    const startEditCustomSection = (section) => {
+      customSectionForm.title = section.title
+      customSectionForm.content = section.content
+      editingCustomSection.value = section.id
+    }
+
+    const cancelEditCustomSection = () => {
+      editingCustomSection.value = null
+    }
+
+    const saveCustomSection = () => {
+      const title = customSectionForm.title.trim()
+      const content = sanitizeHTML(customSectionForm.content)
+      if (!title && !content) {
+        showToast(copy.value.layout.emptyContent, 'error')
+        return
+      }
+      if (editingCustomSection.value === 'new') {
+        config.customSections.push({ id: `cs_${Date.now()}`, title, content, enabled: true })
+      } else {
+        const target = config.customSections.find(section => section.id === editingCustomSection.value)
+        if (target) {
+          target.title = title
+          target.content = content
+        }
+      }
+      editingCustomSection.value = null
+    }
+
+    const removeCustomSection = (index) => {
+      if (!confirm(copy.value.layout.deleteConfirm)) return
+      config.customSections.splice(index, 1)
+    }
+
+    const moveCustomSection = (index, delta) => {
+      const next = index + delta
+      if (next < 0 || next >= config.customSections.length) return
+      const [item] = config.customSections.splice(index, 1)
+      config.customSections.splice(next, 0, item)
     }
 
     // 计算属性
@@ -1740,6 +2043,11 @@ export default {
     const saveSettings = async () => {
       syncLogoSize()
       config.hero.enabled = true
+      // 保存前过滤自定义内容
+      config.customCSS = sanitizeCSS(config.customCSS)
+      config.customSections.forEach(section => {
+        section.content = sanitizeHTML(section.content)
+      })
       
       // 先保存到 localStorage（本地缓存）
       if (!savePersonalization(config)) {
@@ -2722,6 +3030,18 @@ export default {
       currentTab,
       tabs,
       config,
+
+      // Layout
+      layoutModuleList,
+      moveSection,
+      editingCustomSection,
+      customSectionForm,
+      startAddCustomSection,
+      startEditCustomSection,
+      cancelEditCustomSection,
+      saveCustomSection,
+      removeCustomSection,
+      moveCustomSection,
       
       // About
       aboutSections,
@@ -2872,7 +3192,7 @@ export default {
   justify-content: space-between;
   align-items: center;
   padding: 20px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .crop-modal-header h3 {
@@ -2905,7 +3225,7 @@ export default {
   position: relative;
   display: inline-block;
   max-width: 100%;
-  border-radius: 4px;
+  border-radius: var(--radius);
   overflow: hidden;
   line-height: 0;
 }
@@ -2940,7 +3260,7 @@ export default {
   right: 0;
   bottom: 0;
   border: 3px solid white;
-  border-radius: 2px;
+  border-radius: var(--radius);
   box-shadow: 
     0 0 0 2px var(--primary-color),
     inset 0 0 0 1px rgba(0,0,0,0.3);
@@ -3061,8 +3381,8 @@ export default {
   height: 6px;
   -webkit-appearance: none;
   appearance: none;
-  background: #ddd;
-  border-radius: 3px;
+  background: var(--border-color);
+  border-radius: var(--radius);
   outline: none;
 }
 
@@ -3090,14 +3410,14 @@ export default {
   justify-content: flex-end;
   gap: 10px;
   padding: 20px;
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--border-color);
 }
 
 .personalization-layout {
   display: grid;
   grid-template-columns: 260px 1fr;
-  gap: 30px;
-  padding: 30px 0;
+  gap: 32px;
+  padding: var(--space-page) 0;
 }
 
 /* 侧边导航 */
@@ -3131,11 +3451,11 @@ export default {
 }
 
 .nav-btn:hover {
-  background: var(--bg-light);
+  background: var(--secondary-color);
 }
 
 .nav-btn.active {
-  background: var(--primary-color);
+  background: var(--accent-color);
   color: var(--white);
 }
 
@@ -3147,7 +3467,7 @@ export default {
   background: var(--white);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  padding: 20px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -3181,8 +3501,8 @@ export default {
   background: var(--white);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  padding: 25px;
-  margin-bottom: 20px;
+  padding: 32px;
+  margin-bottom: 24px;
 }
 
 .setting-card h3 {
@@ -3235,7 +3555,7 @@ export default {
   min-height: 40px;
   padding: 0 14px;
   border-radius: var(--radius-sm);
-  background: var(--bg-light);
+  background: var(--secondary-color);
   color: var(--text-dark);
   font-weight: 600;
 }
@@ -3243,7 +3563,7 @@ export default {
 .theme-name-input {
   min-width: 220px;
   padding: 10px 14px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   font-size: 0.95rem;
   transition: var(--transition);
@@ -3252,7 +3572,7 @@ export default {
 
 .theme-name-input:focus {
   outline: none;
-  border-color: var(--primary-color);
+  border-color: var(--accent-color);
 }
 
 .add-preset-btn {
@@ -3291,7 +3611,7 @@ export default {
 .form-group textarea {
   width: 100%;
   padding: 12px 15px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   font-size: 1rem;
   transition: var(--transition);
@@ -3301,7 +3621,7 @@ export default {
 .form-group input:focus,
 .form-group textarea:focus {
   outline: none;
-  border-color: var(--primary-color);
+  border-color: var(--accent-color);
 }
 
 /* 头像设置 */
@@ -3316,7 +3636,7 @@ export default {
   height: 120px;
   border-radius: 50%;
   object-fit: cover;
-  border: 3px solid var(--primary-color);
+  border: 3px solid var(--border-color);
 }
 
 .avatar-actions {
@@ -3327,7 +3647,7 @@ export default {
 
 /* 标签输入 */
 .tags-input {
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   padding: 10px;
   background: var(--white);
@@ -3347,7 +3667,7 @@ export default {
   background: var(--primary-color);
   color: var(--white);
   padding: 5px 12px;
-  border-radius: 20px;
+  border-radius: var(--radius);
   font-size: 0.9rem;
 }
 
@@ -3419,7 +3739,7 @@ export default {
 .platform-select {
   width: 150px;
   padding: 10px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   font-size: 1rem;
 }
@@ -3438,7 +3758,7 @@ export default {
   width: 50px;
   height: 45px;
   padding: 5px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   cursor: pointer;
 }
@@ -3483,8 +3803,8 @@ export default {
   align-items: center;
   min-height: 32px;
   padding: 0 12px;
-  border-radius: 999px;
-  background: var(--bg-light);
+  border-radius: var(--radius);
+  background: var(--secondary-color);
   color: var(--text-muted);
   font-size: 0.85rem;
   white-space: nowrap;
@@ -3508,7 +3828,7 @@ export default {
 
 .preset-btn {
   background: var(--white);
-  border: 2px solid #eee;
+  border: 2px solid var(--border-color);
   border-radius: var(--radius-sm);
   padding: 15px;
   cursor: pointer;
@@ -3520,8 +3840,7 @@ export default {
 }
 
 .preset-btn:hover {
-  border-color: var(--primary-color);
-  transform: translateY(-2px);
+  border-color: var(--accent-color);
 }
 
 .preset-colors {
@@ -3559,9 +3878,9 @@ export default {
 
 .preset-empty {
   padding: 18px;
-  border: 1px dashed #ddd;
+  border: 1px dashed var(--border-color);
   border-radius: var(--radius-sm);
-  background: var(--bg-light);
+  background: var(--secondary-color);
   color: var(--text-muted);
   font-size: 0.92rem;
 }
@@ -3581,8 +3900,8 @@ export default {
 .toggle-slider {
   width: 50px;
   height: 26px;
-  background: #ccc;
-  border-radius: 13px;
+  background: var(--border-color);
+  border-radius: var(--radius);
   position: relative;
   transition: var(--transition);
 }
@@ -3600,7 +3919,7 @@ export default {
 }
 
 .toggle-switch input:checked + .toggle-slider {
-  background: var(--primary-color);
+  background: var(--accent-color);
 }
 
 .toggle-switch input:checked + .toggle-slider::after {
@@ -3623,20 +3942,20 @@ export default {
   gap: 8px;
   cursor: pointer;
   padding: 10px 15px;
-  border: 2px solid #ddd;
+  border: 2px solid var(--border-color);
   border-radius: var(--radius-sm);
   transition: var(--transition);
 }
 
 .radio-btn:has(input:checked) {
-  border-color: var(--primary-color);
-  background: rgba(107, 142, 107, 0.1);
+  border-color: var(--accent-color);
+  background: rgba(59, 130, 246, 0.06);
 }
 
 .radio-btn input {
   width: 18px;
   height: 18px;
-  accent-color: var(--primary-color);
+  accent-color: var(--accent-color);
 }
 
 /* 背景图片设置 */
@@ -3658,8 +3977,7 @@ export default {
   width: 100%;
   height: 140px;
   border-radius: var(--radius-sm);
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+  border: 1px solid var(--border-color);
 }
 
 .image-preview {
@@ -3696,7 +4014,7 @@ export default {
   gap: 15px;
   align-items: start;
   padding: 15px;
-  background: var(--bg-light);
+  background: var(--secondary-color);
   border-radius: var(--radius-sm);
 }
 
@@ -3715,7 +4033,7 @@ export default {
 
 .slide-fields input {
   padding: 10px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
 }
 
@@ -3731,7 +4049,7 @@ export default {
 .btn-remove {
   width: 36px;
   height: 36px;
-  border-radius: 50%;
+  border-radius: var(--radius);
   border: none;
   background: #e74c3c;
   color: white;
@@ -3745,16 +4063,15 @@ export default {
 
 .btn-remove:hover {
   background: #c0392b;
-  transform: scale(1.1);
 }
 
 .btn-add {
   padding: 15px;
-  border: 2px dashed #ddd;
+  border: 2px dashed var(--border-color);
 }
 
 .btn-add:hover {
-  border-color: var(--primary-color);
+  border-color: var(--accent-color);
 }
 
 /* 作品列表 */
@@ -3765,7 +4082,7 @@ export default {
 }
 
 .work-item {
-  background: var(--bg-light);
+  background: var(--secondary-color);
   border-radius: var(--radius-sm);
   padding: 15px;
   position: relative;
@@ -3787,7 +4104,7 @@ export default {
 
 .work-fields input {
   padding: 8px 12px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   font-size: 0.9rem;
 }
@@ -3807,6 +4124,62 @@ export default {
   margin-top: 5px;
 }
 
+/* 页面布局 Tab */
+.hint-warning {
+  color: #B45309;
+}
+
+.layout-modules {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.layout-order-list,
+.custom-section-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.layout-order-item,
+.custom-section-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--bg-light);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.layout-order-name {
+  font-weight: 500;
+  color: var(--text-dark);
+}
+
+.layout-order-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.custom-section-editor {
+  padding: 16px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  margin-bottom: 14px;
+}
+
+.custom-css-input {
+  font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+
 /* Logo 设置 */
 .logo-setting {
   display: flex;
@@ -3818,8 +4191,8 @@ export default {
   width: 92px;
   height: 92px;
   border-radius: var(--radius-sm);
-  background: var(--bg-light);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--secondary-color);
+  border: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3865,7 +4238,7 @@ export default {
 .logo-size-inputs input[type="number"] {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   font-size: 0.95rem;
 }
@@ -3883,7 +4256,7 @@ export default {
   gap: 8px;
   width: 100%;
   padding: 16px;
-  border: 2px solid #e8e8e8;
+  border: 2px solid var(--border-color);
   border-radius: var(--radius-sm);
   background: var(--white);
   color: var(--text-dark);
@@ -3893,14 +4266,13 @@ export default {
 }
 
 .font-option:hover {
-  border-color: var(--primary-color);
-  transform: translateY(-2px);
+  border-color: var(--accent-color);
 }
 
 .font-option.active {
-  border-color: var(--primary-color);
-  box-shadow: 0 10px 24px rgba(107, 142, 107, 0.12);
-  background: linear-gradient(135deg, rgba(107, 142, 107, 0.08), rgba(255, 255, 255, 0.96));
+  border-color: var(--accent-color);
+  box-shadow: var(--shadow);
+  background: var(--white);
 }
 
 .font-option-name {
@@ -4006,8 +4378,8 @@ export default {
 .empty-state-card {
   text-align: center;
   padding: 40px 20px;
-  background: var(--card-bg);
-  border-radius: 16px;
+  background: var(--secondary-color);
+  border-radius: var(--radius);
   border: 2px dashed var(--border-color);
   margin-bottom: 24px;
 }
@@ -4025,7 +4397,7 @@ export default {
 
 /* Social 编辑器样式 */
 .social-item-editor {
-  background: #f8f9fa;
+  background: var(--secondary-color);
   padding: 16px;
   border-radius: 8px;
   margin-bottom: 16px;
@@ -4047,14 +4419,14 @@ export default {
 .social-item-editor select {
   width: 100%;
   padding: 10px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
   background: white;
 }
 
 /* About & Contact 编辑器样式 */
 .about-item-editor {
-  background: #f8f9fa;
+  background: var(--secondary-color);
   padding: 16px;
   border-radius: 8px;
   margin-bottom: 16px;
@@ -4082,8 +4454,8 @@ export default {
 .about-item-editor textarea {
   width: 100%;
   padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
   font-size: 0.9rem;
 }
 
@@ -4121,7 +4493,7 @@ export default {
 
 .section-title-input:hover,
 .section-title-input:focus {
-  border-bottom-color: var(--primary-color);
+  border-bottom-color: var(--accent-color);
   outline: none;
 }
 
@@ -4137,9 +4509,10 @@ export default {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: #e9ecef;
+  background: var(--secondary-color);
+  border: 1px solid var(--border-color);
   padding: 6px 12px;
-  border-radius: 20px;
+  border-radius: var(--radius);
   font-size: 0.9rem;
 }
 
@@ -4170,8 +4543,8 @@ export default {
 .category-select-row select {
   width: 100%;
   padding: 10px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
   background: white;
 }
 
@@ -4224,9 +4597,9 @@ export default {
 }
 
 .moment-card {
-  background: #f8f9fa;
+  background: var(--secondary-color);
   padding: 16px;
-  border-radius: 12px;
+  border-radius: var(--radius);
 }
 
 .moment-header {
@@ -4246,14 +4619,14 @@ export default {
   background: var(--primary-color);
   color: white;
   padding: 2px 8px;
-  border-radius: 12px;
+  border-radius: var(--radius);
 }
 
 .moment-category {
-  background: #6c757d;
+  background: var(--text-muted);
   color: white;
   padding: 2px 8px;
-  border-radius: 12px;
+  border-radius: var(--radius);
 }
 
 .moment-date {

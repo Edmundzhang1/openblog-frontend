@@ -284,16 +284,21 @@
               <tr>
                 <th>UID</th>
                 <th>{{ copy.nickname }}</th>
+                <th>{{ copy.slug }}</th>
                 <th>{{ copy.email }}</th>
                 <th>{{ copy.role }}</th>
                 <th>{{ copy.artistStatus }}</th>
                 <th>{{ copy.registeredAt }}</th>
+                <th>{{ copy.actions }}</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="user in users" :key="user.uid">
                 <td class="value-cell">{{ user.uid }}</td>
                 <td>{{ user.nickname }}</td>
+                <td class="value-cell">
+                  <router-link :to="`/@${user.slug || user.uid}`" target="_blank" class="slug-link">{{ user.slug || user.uid }}</router-link>
+                </td>
                 <td>{{ user.email || '-' }}</td>
                 <td>
                   <select
@@ -312,6 +317,11 @@
                   </span>
                 </td>
                 <td>{{ formatDate(user.created_at) }}</td>
+                <td class="action-cell">
+                  <button type="button" class="slug-edit-button" @click="openSlugModal(user)">
+                    {{ copy.editSlug }}
+                  </button>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -341,6 +351,39 @@
         </div>
       </section>
     </div>
+
+    <!-- 修改主页路径弹窗 -->
+    <div v-if="slugModal" class="modal-backdrop" @click.self="closeSlugModal">
+      <section class="slug-modal" role="dialog" aria-modal="true">
+        <header>
+          <h2>{{ copy.slugModalTitle }}</h2>
+          <button type="button" :aria-label="copy.close" @click="closeSlugModal">×</button>
+        </header>
+        <div class="slug-modal-body">
+          <p class="slug-modal-user">{{ slugModal.nickname }} · UID {{ slugModal.uid }}</p>
+          <div class="form-group">
+            <label for="slug-input">{{ copy.slug }}</label>
+            <input
+              id="slug-input"
+              v-model.trim="slugModal.value"
+              type="text"
+              minlength="2"
+              maxlength="50"
+              :placeholder="copy.slugPlaceholder"
+              @keyup.enter="saveSlug"
+            >
+            <small class="field-hint">{{ copy.slugFormatHint }}</small>
+          </div>
+          <p v-if="slugError" class="form-error" role="alert">{{ slugError }}</p>
+        </div>
+        <footer>
+          <button type="button" class="btn-clear modal-button" @click="closeSlugModal">{{ copy.cancel }}</button>
+          <button type="button" class="btn-search modal-button" :disabled="slugSaving" @click="saveSlug">
+            {{ slugSaving ? copy.saving : copy.save }}
+          </button>
+        </footer>
+      </section>
+    </div>
   </main>
 </template>
 
@@ -367,6 +410,9 @@ const CONTENT = {
     rejectReasonPlaceholder: '拒绝时必须填写原因', approve: '通过', reject: '拒绝', rejectReasonRequired: '拒绝申请前请填写原因', approved: '申请已通过', rejected: '申请已拒绝', emptyApplications: '当前没有待审核申请。',
     usersTitle: '用户管理', usersHint: '搜索用户并调整角色', searchPlaceholder: '搜索 UID 或昵称...', search: '搜索', clear: '清除',
     nickname: '昵称', email: '邮箱', role: '角色', artistStatus: '画师状态', registeredAt: '注册时间', emptyUsers: '未找到用户',
+    slug: '主页路径', actions: '操作', editSlug: '修改主页路径', slugModalTitle: '修改主页路径', slugPlaceholder: '如：xiaoming-art',
+    slugFormatHint: '2-50 位，仅限小写字母、数字、下划线和中划线', slugInvalid: '主页路径格式不正确：2-50 位，仅限小写字母、数字、_ 和 -',
+    slugUpdated: '主页路径已更新', save: '保存', cancel: '取消', close: '关闭',
     prevPage: '上一页', nextPage: '下一页', roleUpdated: '角色更新成功', confirmRoleChange: '确认将该用户的角色切换为',
     roles: { CLIENT: '普通用户', ARTIST: '画师', ADMIN: '管理员' },
     artistStatuses: { UNAPPLIED: '未申请', PENDING: '审核中', APPROVED: '已通过', REJECTED: '已拒绝', '': '-' }
@@ -385,6 +431,9 @@ const CONTENT = {
     rejectReasonPlaceholder: 'A reason is required when rejecting', approve: 'Approve', reject: 'Reject', rejectReasonRequired: 'Enter a rejection reason first.', approved: 'Application approved.', rejected: 'Application rejected.', emptyApplications: 'No applications are waiting for review.',
     usersTitle: 'User Management', usersHint: 'Search users and adjust roles', searchPlaceholder: 'Search by UID or nickname...', search: 'Search', clear: 'Clear',
     nickname: 'Nickname', email: 'Email', role: 'Role', artistStatus: 'Artist status', registeredAt: 'Registered', emptyUsers: 'No users found.',
+    slug: 'Page path', actions: 'Actions', editSlug: 'Edit page path', slugModalTitle: 'Edit Page Path', slugPlaceholder: 'e.g. xiaoming-art',
+    slugFormatHint: '2-50 chars: lowercase letters, digits, underscores and hyphens only', slugInvalid: 'Invalid page path: 2-50 chars, lowercase letters, digits, _ and - only.',
+    slugUpdated: 'Page path updated.', save: 'Save', cancel: 'Cancel', close: 'Close',
     prevPage: 'Previous', nextPage: 'Next', roleUpdated: 'Role updated.', confirmRoleChange: 'Switch this user\'s role to ',
     roles: { CLIENT: 'Client', ARTIST: 'Artist', ADMIN: 'Admin' },
     artistStatuses: { UNAPPLIED: 'Not applied', PENDING: 'Pending', APPROVED: 'Approved', REJECTED: 'Rejected', '': '-' }
@@ -410,6 +459,7 @@ export default {
       stats: emptyStats(), users: [], searchKeyword: '',
       userPagination: { page: 1, page_size: 20, total: 0, total_pages: 1 },
       blacklistForm: { type: 'EMAIL', value: '', reason: '' }, rejectReasons: {},
+      slugModal: null, slugSaving: false, slugError: '',
       loadingStats: false, loadingConfig: false, loadingBlacklist: false, loadingApplications: false, loadingUsers: false,
       statsError: '', configError: '', saveConfigError: '', blacklistError: '', applicationsError: '', usersError: '',
       savingConfig: false, addingBlacklist: false, removingId: null, reviewingUid: null
@@ -537,6 +587,38 @@ export default {
       if (page < 1 || page > this.userPagination.total_pages) return
       this.loadUsers(page)
     },
+    openSlugModal(user) {
+      this.slugError = ''
+      this.slugModal = { uid: user.uid, nickname: user.nickname || '', value: user.slug || String(user.uid) }
+    },
+    closeSlugModal() {
+      if (this.slugSaving) return
+      this.slugModal = null
+      this.slugError = ''
+    },
+    async saveSlug() {
+      const modal = this.slugModal
+      if (!modal || this.slugSaving) return
+      const slug = String(modal.value || '').trim()
+      // 与后端一致的格式校验：^[a-z0-9_-]{2,50}$
+      if (!/^[a-z0-9_-]{2,50}$/.test(slug)) {
+        this.slugError = this.copy.slugInvalid
+        return
+      }
+      this.slugSaving = true
+      this.slugError = ''
+      try {
+        await apiRequest(API_ENDPOINTS.ADMIN_USER_SLUG(modal.uid), { method: 'PATCH', body: { slug }, showError: false })
+        showToast(this.copy.slugUpdated, 'success')
+        this.slugModal = null
+        await this.loadUsers(this.userPagination.page)
+      } catch (error) {
+        // 失败时展示后端返回的 message
+        this.slugError = error.message || this.copy.slugInvalid
+      } finally {
+        this.slugSaving = false
+      }
+    },
     async changeRole(uid, newRole) {
       if (!window.confirm(`${this.copy.confirmRoleChange}${this.formatRoleName(newRole)}？`)) {
         // 取消时重新加载列表以恢复下拉框原值
@@ -571,16 +653,16 @@ export default {
 </script>
 
 <style scoped>
-.admin-workspace { margin: 38px auto 72px; background: #fff; border: 1px solid #E5E5E5; }
-.workspace-bar { min-height: 66px; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 14px 24px; background: #fff; color: var(--text-dark); border-bottom: 1px solid #E5E5E5; }
+.admin-workspace { margin: 38px auto 72px; background: #fff; border: 1px solid #E5E7EB; }
+.workspace-bar { min-height: 66px; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 14px 24px; background: #fff; color: var(--text-dark); border-bottom: 1px solid #E5E7EB; }
 .workspace-bar > div { display: flex; align-items: baseline; gap: 12px; }
 .workspace-bar span { color: var(--text-muted); font-size: 0.8rem; }
-.refresh-button { min-height: 38px; display: inline-flex; align-items: center; gap: 7px; padding: 0 12px; border: 1px solid #E5E5E5; border-radius: 8px; background: #fff; color: var(--text-dark); font: inherit; cursor: pointer; transition: var(--transition); }
-.admin-tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 10px 24px; border-bottom: 1px solid #E5E5E5; background: #FAFAFA; }
-.tab-button { min-height: 38px; padding: 0 16px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--text-muted); font: inherit; font-weight: 600; cursor: pointer; transition: var(--transition); }
+.refresh-button { min-height: 38px; display: inline-flex; align-items: center; gap: 7px; padding: 0 12px; border: 1px solid #E5E7EB; border-radius: var(--radius); background: #fff; color: var(--text-dark); font: inherit; cursor: pointer; transition: var(--transition); }
+.admin-tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 10px 24px; border-bottom: 1px solid #E5E7EB; background: #FAFAFA; }
+.tab-button { min-height: 38px; padding: 0 16px; border: 1px solid transparent; border-radius: var(--radius); background: transparent; color: var(--text-muted); font: inherit; font-weight: 600; cursor: pointer; transition: var(--transition); }
 .tab-button:hover { color: var(--text-dark); background: #F0F0F0; }
-.tab-button.active { background: #fff; border-color: #E5E5E5; color: var(--primary-color); }
-.admin-section { padding: 64px 28px; border-bottom: 1px solid #E5E5E5; }
+.tab-button.active { background: #fff; border-color: #E5E7EB; color: var(--primary-color); }
+.admin-section { padding: 64px 28px; border-bottom: 1px solid #E5E7EB; }
 .admin-section:last-child { border-bottom: 0; }
 .section-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; margin-bottom: 24px; }
 .section-index { display: block; margin-bottom: 6px; color: var(--text-muted); font: 800 0.72rem/1 monospace; }
@@ -588,33 +670,33 @@ export default {
 .section-heading p { margin: 5px 0 0; color: var(--text-muted); }
 .updated-at, .count-label { color: var(--text-muted); font-size: 0.8rem; }
 .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; }
-.stat-card { display: flex; align-items: center; gap: 14px; padding: 20px; border: 1px solid #E5E5E5; border-radius: 8px; background: #FAFAFA; transition: var(--transition); }
-.stat-card.highlight { background: rgba(212, 165, 116, 0.08); border-color: rgba(212, 165, 116, 0.35); }
-.stat-icon { display: inline-grid; place-items: center; width: 42px; height: 42px; border-radius: 8px; background: #fff; border: 1px solid #E5E5E5; color: var(--primary-color); }
+.stat-card { display: flex; align-items: center; gap: 14px; padding: 20px; border: 1px solid #E5E7EB; border-radius: var(--radius); background: #FAFAFA; transition: var(--transition); }
+.stat-card.highlight { background: #FAFAFA; border-color: var(--accent-color); }
+.stat-icon { display: inline-grid; place-items: center; width: 42px; height: 42px; border-radius: var(--radius); background: #fff; border: 1px solid #E5E7EB; color: var(--primary-color); }
 .stat-label { display: block; margin-bottom: 4px; color: var(--text-muted); font-size: 0.82rem; }
 .stat-value { display: block; color: var(--text-dark); font-size: 1.5rem; }
 .config-form { max-width: 860px; }
 .form-group { margin-bottom: 18px; }
 .form-group textarea { min-height: 84px; }
 .form-actions { display: flex; justify-content: flex-end; }
-.compact-button { min-height: 42px; padding: 0 18px; border-radius: 8px; font-size: 0.9rem; }
+.compact-button { min-height: 42px; padding: 0 18px; border-radius: var(--radius); font-size: 0.9rem; }
 .form-error { margin: 0 0 14px; padding: 11px 13px; background: #FEF2F2; color: #B91C1C; border-left: 3px solid #EF4444; }
-.blacklist-form { display: grid; grid-template-columns: 130px minmax(170px, 0.8fr) minmax(210px, 1fr) auto; align-items: end; gap: 12px; margin-bottom: 22px; padding: 18px; background: #F5F5F5; }
+.blacklist-form { display: grid; grid-template-columns: 130px minmax(170px, 0.8fr) minmax(210px, 1fr) auto; align-items: end; gap: 12px; margin-bottom: 22px; padding: 18px; background: #FAFAFA; }
 .compact-field { margin: 0; }
 .compact-field label { font-size: 0.82rem; }
 .add-button { margin-bottom: 0; }
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; }
-th, td { padding: 12px 10px; text-align: left; border-bottom: 1px solid #E5E5E5; vertical-align: top; }
+th, td { padding: 12px 10px; text-align: left; border-bottom: 1px solid #E5E7EB; vertical-align: top; }
 th { color: var(--text-muted); font-size: 0.78rem; }
 td { font-size: 0.88rem; }
-.type-badge { display: inline-block; padding: 3px 7px; border-radius: 8px; background: #F5F5F5; color: rgba(26, 26, 26, 0.65); font-size: 0.72rem; font-weight: 700; }
+.type-badge { display: inline-block; padding: 3px 7px; border-radius: var(--radius); background: #F3F4F6; color: var(--text-light); font-size: 0.72rem; font-weight: 700; }
 .value-cell { font-family: monospace; overflow-wrap: anywhere; }
 .action-cell { width: 48px; text-align: right; }
-.delete-button { width: 30px; height: 30px; display: inline-grid; place-items: center; border: 1px solid #FCA5A5; border-radius: 8px; background: #fff; color: #B91C1C; cursor: pointer; transition: var(--transition); }
+.delete-button { width: 30px; height: 30px; display: inline-grid; place-items: center; border: 1px solid #FCA5A5; border-radius: var(--radius); background: #fff; color: #B91C1C; cursor: pointer; transition: var(--transition); }
 .application-list { display: grid; gap: 14px; }
-.application-card { border: 1px solid #E5E5E5; border-radius: 8px; overflow: hidden; }
-.application-card header { display: flex; justify-content: space-between; gap: 18px; padding: 16px 18px; background: #FAFAFA; border-bottom: 1px solid #E5E5E5; }
+.application-card { border: 1px solid #E5E7EB; border-radius: var(--radius); overflow: hidden; }
+.application-card header { display: flex; justify-content: space-between; gap: 18px; padding: 16px 18px; background: #FAFAFA; border-bottom: 1px solid #E5E7EB; }
 .application-card h3 { margin: 0; font-size: 1rem; }
 .application-card header p, .application-card time { margin: 3px 0 0; color: var(--text-muted); font-size: 0.78rem; }
 .application-body { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(220px, 0.5fr); gap: 24px; padding: 18px; }
@@ -622,26 +704,26 @@ td { font-size: 0.88rem; }
 .application-body p { margin: 0; color: var(--text-light); white-space: pre-wrap; overflow-wrap: anywhere; }
 .portfolio-links { display: grid; gap: 6px; }
 .portfolio-links a { color: var(--primary-color); font-size: 0.85rem; text-decoration: underline; overflow-wrap: anywhere; transition: var(--transition); }
-.application-card footer { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; padding: 13px 18px; border-top: 1px solid #E5E5E5; }
-.application-card footer input { min-width: 0; height: 40px; padding: 0 11px; border: 1px solid #E5E5E5; border-radius: 8px; font: inherit; }
-.approve-button, .reject-button { min-height: 40px; padding: 0 14px; border-radius: 8px; font-weight: 700; cursor: pointer; transition: var(--transition); }
+.application-card footer { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; padding: 13px 18px; border-top: 1px solid #E5E7EB; }
+.application-card footer input { min-width: 0; height: 40px; padding: 0 11px; border: 1px solid #E5E7EB; border-radius: var(--radius); font: inherit; }
+.approve-button, .reject-button { min-height: 40px; padding: 0 14px; border-radius: var(--radius); font-weight: 700; cursor: pointer; transition: var(--transition); }
 .approve-button { border: 1px solid var(--primary-color); background: var(--primary-color); color: #fff; }
 .reject-button { border: 1px solid #FCA5A5; background: #fff; color: #B91C1C; }
 .search-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.search-bar input { width: 220px; height: 40px; padding: 0 12px; border: 1px solid #E5E5E5; border-radius: 8px; font: inherit; }
+.search-bar input { width: 220px; height: 40px; padding: 0 12px; border: 1px solid #E5E7EB; border-radius: var(--radius); font: inherit; }
 .search-bar input:focus { outline: none; border-color: var(--primary-color); }
-.btn-search, .btn-clear { min-height: 40px; padding: 0 16px; border: 0; border-radius: 8px; font-size: 0.9rem; cursor: pointer; transition: var(--transition); }
+.btn-search, .btn-clear { min-height: 40px; padding: 0 16px; border: 0; border-radius: var(--radius); font-size: 0.9rem; cursor: pointer; transition: var(--transition); }
 .btn-search { background: var(--primary-color); color: #fff; }
-.btn-clear { background: #F3F4F6; color: #6B7280; }
-.role-select { min-width: 100px; padding: 6px 10px; border: 1px solid #E0E0E0; border-radius: 8px; background: #fff; font-size: 0.85rem; cursor: pointer; }
+.btn-clear { background: #F3F4F6; color: var(--text-light); }
+.role-select { min-width: 100px; padding: 6px 10px; border: 1px solid #E5E7EB; border-radius: var(--radius); background: #fff; font-size: 0.85rem; cursor: pointer; }
 .role-select:focus { outline: none; border-color: var(--primary-color); }
-.status-tag { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 0.8rem; font-weight: 500; }
+.status-tag { display: inline-block; padding: 4px 10px; border-radius: var(--radius); font-size: 0.8rem; font-weight: 500; }
 .status-tag.UNAPPLIED { background: rgba(156, 163, 175, 0.15); color: #6B7280; }
-.status-tag.PENDING { background: rgba(212, 165, 116, 0.15); color: #8B6B2F; }
-.status-tag.APPROVED { background: rgba(107, 142, 107, 0.15); color: var(--primary-color); }
+.status-tag.PENDING { background: rgba(245, 158, 11, 0.12); color: #B45309; }
+.status-tag.APPROVED { background: rgba(34, 197, 94, 0.12); color: #15803D; }
 .status-tag.REJECTED { background: rgba(239, 68, 68, 0.1); color: #DC2626; }
-.pagination { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 20px; padding-top: 16px; border-top: 1px solid #E5E5E5; }
-.btn-page { min-height: 38px; padding: 0 16px; background: #fff; border: 1px solid #E5E5E5; border-radius: 8px; font-size: 0.9rem; cursor: pointer; transition: var(--transition); }
+.pagination { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 20px; padding-top: 16px; border-top: 1px solid #E5E7EB; }
+.btn-page { min-height: 38px; padding: 0 16px; background: #fff; border: 1px solid #E5E7EB; border-radius: var(--radius); font-size: 0.9rem; cursor: pointer; transition: var(--transition); }
 .btn-page:hover:not(:disabled) { background: var(--primary-color); color: #fff; border-color: var(--primary-color); }
 .btn-page:disabled { opacity: 0.4; cursor: not-allowed; }
 .page-info { color: var(--text-muted); font-size: 0.9rem; }
@@ -650,6 +732,25 @@ td { font-size: 0.88rem; }
 .error-state { color: #B91C1C; }
 .text-button { margin-top: 8px; border: 0; background: transparent; color: var(--primary-color); font-weight: 700; cursor: pointer; transition: var(--transition); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.slug-link { color: var(--primary-color); text-decoration: none; }
+.slug-link:hover { text-decoration: underline; }
+.slug-edit-button { min-height: 32px; padding: 0 12px; border: 1px solid #E5E7EB; border-radius: var(--radius); background: #fff; color: var(--primary-color); font-size: 0.8rem; font-weight: 600; cursor: pointer; white-space: nowrap; transition: var(--transition); }
+.slug-edit-button:hover { border-color: var(--primary-color); }
+/* 修改主页路径弹窗 */
+.modal-backdrop { position: fixed; inset: 0; z-index: 2100; display: grid; place-items: center; padding: 20px; background: rgba(0, 0, 0, 0.5); }
+.slug-modal { width: min(100%, 420px); background: #fff; border-radius: var(--radius); box-shadow: var(--shadow-hover); overflow: hidden; }
+.slug-modal header { padding: 20px 24px 0; display: flex; align-items: center; justify-content: space-between; }
+.slug-modal header h2 { font-size: 1.1rem; }
+.slug-modal header button { width: 34px; height: 34px; border: 0; background: transparent; font-size: 1.4rem; cursor: pointer; color: var(--text-muted); transition: var(--transition); }
+.slug-modal header button:hover { color: var(--text-dark); }
+.slug-modal-body { padding: 16px 24px 20px; }
+.slug-modal-user { margin: 0 0 14px; color: var(--text-muted); font-size: 0.85rem; }
+.slug-modal-body label { display: block; margin-bottom: 8px; font-size: 0.85rem; font-weight: 600; color: var(--text-dark); }
+.slug-modal-body input { width: 100%; height: 42px; padding: 0 12px; border: 1px solid #E5E7EB; border-radius: var(--radius); font: inherit; }
+.slug-modal-body input:focus { outline: none; border-color: var(--primary-color); }
+.slug-modal footer { padding: 0 24px 20px; display: flex; justify-content: flex-end; gap: 10px; }
+.modal-button { min-height: 40px; }
+.field-hint { display: block; margin-top: 6px; color: var(--text-muted); font-size: 0.78rem; }
 @media (max-width: 860px) {
   .blacklist-form { grid-template-columns: 120px minmax(0, 1fr); }
   .reason-field { grid-column: 1 / 2; }

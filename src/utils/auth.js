@@ -1,29 +1,10 @@
 const STORAGE_KEYS = {
   TOKEN: 'furest-token',
-  USER: 'furest-user',
-  USERS: 'furest-users'
+  REFRESH_TOKEN: 'furest-refresh-token',
+  USER: 'furest-user'
 }
 
 export const AUTH_CHANGED_EVENT = 'furest-auth-changed'
-
-const DEMO_USERS = [
-  {
-    id: 'demo-user',
-    username: 'user',
-    password: 'user123',
-    email: 'user@furest.local',
-    role: 'user',
-    createdAt: '2026-03-16T10:00:00.000Z'
-  },
-  {
-    id: 'demo-admin',
-    username: 'admin',
-    password: 'furest123',
-    email: 'admin@furest.local',
-    role: 'admin',
-    createdAt: '2026-03-16T10:05:00.000Z'
-  }
-]
 
 function readJSON(key, fallback) {
   try {
@@ -39,14 +20,6 @@ function writeJSON(key, value) {
   localStorage.setItem(key, JSON.stringify(value))
 }
 
-function normalizeText(value) {
-  return String(value || '').trim()
-}
-
-function normalizeUsername(value) {
-  return normalizeText(value).toLowerCase()
-}
-
 function sanitizeUser(user) {
   if (!user) return null
   const { password, ...safeUser } = user
@@ -58,61 +31,36 @@ function emitAuthChanged() {
   window.dispatchEvent(new CustomEvent(AUTH_CHANGED_EVENT, { detail: getCurrentUser() }))
 }
 
-function persistUsers(users) {
-  writeJSON(STORAGE_KEYS.USERS, users)
-}
-
-function ensureDemoUsers() {
-  const storedUsers = readJSON(STORAGE_KEYS.USERS, [])
-  const mergedUsers = Array.isArray(storedUsers) ? [...storedUsers] : []
-  let updated = false
-
-  DEMO_USERS.forEach((demoUser) => {
-    const existingIndex = mergedUsers.findIndex(
-      (user) => normalizeUsername(user.username) === normalizeUsername(demoUser.username)
-    )
-
-    if (existingIndex === -1) {
-      mergedUsers.push(demoUser)
-      updated = true
-      return
-    }
-
-    const existingUser = mergedUsers[existingIndex]
-    const shouldReplace =
-      existingUser.password !== demoUser.password ||
-      existingUser.role !== demoUser.role ||
-      existingUser.email !== demoUser.email
-
-    if (shouldReplace) {
-      mergedUsers.splice(existingIndex, 1, {
-        ...existingUser,
-        ...demoUser,
-        createdAt: existingUser.createdAt || demoUser.createdAt
-      })
-      updated = true
-    }
-  })
-
-  if (updated || !Array.isArray(storedUsers)) {
-    persistUsers(mergedUsers)
+export function saveSession(data) {
+  // 兼容两种入参：本地用户对象，或后端登录响应 { user, tokens, is_new_user }
+  const user = data?.user && typeof data.user === 'object' ? data.user : data
+  const tokens = data?.tokens
+  const accessToken = tokens?.access_token || `furest-${user.role}-${Date.now()}`
+  localStorage.setItem(STORAGE_KEYS.TOKEN, accessToken)
+  if (tokens?.refresh_token) {
+    localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, tokens.refresh_token)
   }
-
-  return mergedUsers
-}
-
-function saveSession(user) {
   const safeUser = sanitizeUser(user)
-  localStorage.setItem(STORAGE_KEYS.TOKEN, `furest-${user.role}-${Date.now()}`)
   writeJSON(STORAGE_KEYS.USER, safeUser)
   emitAuthChanged()
   return safeUser
 }
 
-export function getAllUsers() {
-  return ensureDemoUsers()
-    .map(sanitizeUser)
-    .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+export function getAccessToken() {
+  return localStorage.getItem(STORAGE_KEYS.TOKEN) || ''
+}
+
+export function getRefreshToken() {
+  return localStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN) || ''
+}
+
+export function updateTokens(tokens) {
+  if (!tokens || typeof tokens !== 'object' || !tokens.access_token) return false
+  localStorage.setItem(STORAGE_KEYS.TOKEN, tokens.access_token)
+  if (tokens.refresh_token) {
+    localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, tokens.refresh_token)
+  }
+  return true
 }
 
 export function getCurrentUser() {
@@ -127,48 +75,8 @@ export function isAdmin(user = getCurrentUser()) {
   return user?.role === 'admin'
 }
 
-export function loginLocal({ username, password }) {
-  const normalizedUsername = normalizeUsername(username)
-  const normalizedPassword = String(password || '')
-  const matchedUser = ensureDemoUsers().find(
-    (user) =>
-      normalizeUsername(user.username) === normalizedUsername &&
-      String(user.password || '') === normalizedPassword
-  )
-
-  if (!matchedUser) {
-    return { ok: false, error: 'INVALID_CREDENTIALS' }
-  }
-
-  return { ok: true, user: saveSession(matchedUser) }
-}
-
-export function registerLocalUser({ username, password, email }) {
-  const normalizedUsername = normalizeUsername(username)
-  const normalizedEmail = normalizeText(email).toLowerCase()
-  const users = ensureDemoUsers()
-
-  const exists = users.some((user) => {
-    const sameUsername = normalizeUsername(user.username) === normalizedUsername
-    const sameEmail = normalizedEmail && String(user.email || '').toLowerCase() === normalizedEmail
-    return sameUsername || sameEmail
-  })
-
-  if (exists) {
-    return { ok: false, error: 'ACCOUNT_EXISTS' }
-  }
-
-  const newUser = {
-    id: `user-${Date.now()}`,
-    username: normalizeText(username),
-    password: String(password || ''),
-    email: normalizeText(email),
-    role: 'user',
-    createdAt: new Date().toISOString()
-  }
-
-  persistUsers([...users, newUser])
-  return { ok: true, user: sanitizeUser(newUser) }
+export function isArtist(user = getCurrentUser()) {
+  return String(user?.role || '').toUpperCase() === 'ARTIST'
 }
 
 export function updateStoredUser(updates) {
@@ -182,6 +90,7 @@ export function updateStoredUser(updates) {
 
 export function clearSession() {
   localStorage.removeItem(STORAGE_KEYS.TOKEN)
+  localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN)
   localStorage.removeItem(STORAGE_KEYS.USER)
   emitAuthChanged()
 }

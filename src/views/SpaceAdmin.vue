@@ -482,132 +482,94 @@ export default {
 <style scoped>
 .space-admin-page {
   min-height: 100vh;
-  background: #f5f5f5;
-}
-
-.page-header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  padding: 40px 0;
-  text-align: center;
-}
-
-.page-header h1 {
-  font-size: 2rem;
-  margin-bottom: 10px;
+  background: var(--white);
 }
 
 .admin-section {
-  padding: 30px 0 60px;
-}
-
-.container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 20px;
+  padding: 32px 0 64px;
 }
 
 /* 标签切换 */
 .admin-tabs {
   display: flex;
-  gap: 10px;
-  margin-bottom: 30px;
-  background: white;
-  padding: 10px;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  gap: 4px;
+  margin-bottom: 32px;
+  background: var(--white);
+  padding: 6px;
+  border-radius: var(--radius);
+  border: 1px solid #E5E7EB;
 }
 
 .tab-btn {
   flex: 1;
-  padding: 15px 20px;
+  padding: 10px 16px;
   border: none;
   background: transparent;
-  border-radius: 8px;
+  border-radius: var(--radius);
   cursor: pointer;
-  font-size: 1rem;
-  transition: all 0.3s;
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  transition: var(--transition);
 }
 
 .tab-btn:hover {
-  background: #f0f0f0;
+  background: #F3F4F6;
+  color: var(--text-dark);
 }
 
 .tab-btn.active {
-  background: #667eea;
-  color: white;
+  background: var(--primary-color);
+  color: var(--white);
 }
 
 /* 内容区域 */
 .tab-content {
-  background: white;
-  border-radius: 12px;
-  padding: 30px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  background: var(--white);
+  border-radius: var(--radius);
+  padding: 32px;
+  border: 1px solid #E5E7EB;
 }
 
 .section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 30px;
+  margin-bottom: 32px;
   padding-bottom: 20px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid #E5E7EB;
 }
 
 .section-header h2 {
   font-size: 1.5rem;
-  color: #333;
+  color: var(--text-dark);
 }
 
-/* 按钮样式 */
-.btn {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  transition: all 0.3s;
-}
-
-.btn-primary {
-  background: #667eea;
-  color: white;
-}
-
-.btn-primary:hover {
-  background: #5a6fd6;
-}
-
-.btn-primary:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-secondary {
-  background: #f0f0f0;
-  color: #333;
-}
-
-.btn-outline {
-  background: transparent;
-  border: 1px dashed #ccc;
-  color: #666;
-}
-
-.btn-outline:hover {
-  border-color: #667eea;
-  color: #667eea;
-}
-
+/* 小按钮（页面自定义，语义同全局 .btn-outline） */
 .btn-small {
-  padding: 5px 12px;
+  padding: 6px 12px;
   font-size: 0.8rem;
+  border: 1px solid #E5E7EB;
+  border-radius: var(--radius);
+  background: var(--white);
+  color: var(--text-dark);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.btn-small:hover {
+  border-color: var(--accent-color);
+  color: var(--accent-color);
 }
 
 .btn-danger {
-  background: #ff6b6b;
-  color: white;
+  color: #DC2626;
+  border-color: #FCA5A5;
+}
+
+.btn-danger:hover {
+  background: #FEF2F2;
+  border-color: #FCA5A5;
+  color: #DC2626;
 }
 
 /* 加载状态 */
@@ -630,7 +592,7 @@ export default {
 .empty-state {
   text-align: center;
   padding: 60px 20px;
-  color: #999;
+  color: var(--text-muted);
 }
 
 .empty-icon {
@@ -651,15 +613,15 @@ export default {
 }
 
 .work-card {
-  background: #f8f9fa;
-  border-radius: 12px;
+  background: var(--white);
+  border: 1px solid #E5E7EB;
+  border-radius: var(--radius);
   overflow: hidden;
-  transition: transform 0.3s;
+  transition: var(--transition);
 }
 
 .work-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  box-shadow: var(--shadow-hover);
 }
 
 .work-card img {
@@ -680,9 +642,9 @@ export default {
 .category-tag {
   display: inline-block;
   padding: 4px 10px;
-  background: #667eea;
-  color: white;
-  border-radius: 20px;
+  background: #F3F4F6;
+  color: var(--text-light);
+  border-radius: var(--radius);
   font-size: 0.75rem;
 }
 
@@ -700,20 +662,21 @@ export default {
 }
 
 .editor-section {
-  background: #f8f9fa;
+  background: #FAFAFA;
   padding: 20px;
-  border-radius: 12px;
+  border-radius: var(--radius);
 }
 
 .editor-section h3 {
   margin-bottom: 20px;
-  color: #333;
+  color: var(--text-dark);
 }
 
 .about-item {
-  background: white;
+  background: var(--white);
+  border: 1px solid #E5E7EB;
   padding: 15px;
-  border-radius: 8px;
+  border-radius: var(--radius);
   margin-bottom: 15px;
   display: grid;
   gap: 10px;
@@ -722,8 +685,8 @@ export default {
 .about-item input,
 .about-item textarea {
   padding: 10px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
+  border: 1px solid #E5E7EB;
+  border-radius: var(--radius);
   font-size: 0.9rem;
 }
 
@@ -765,20 +728,20 @@ export default {
 
 .form-group label {
   font-weight: 500;
-  color: #555;
+  color: var(--text-dark);
 }
 
 .form-group input {
   padding: 12px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
+  border: 1px solid #E5E7EB;
+  border-radius: var(--radius);
   font-size: 0.95rem;
 }
 
 .faq-section {
-  background: #f8f9fa;
+  background: #FAFAFA;
   padding: 20px;
-  border-radius: 12px;
+  border-radius: var(--radius);
 }
 
 .faq-section h3 {
@@ -786,17 +749,18 @@ export default {
 }
 
 .faq-item-editor {
-  background: white;
+  background: var(--white);
+  border: 1px solid #E5E7EB;
   padding: 15px;
-  border-radius: 8px;
+  border-radius: var(--radius);
   margin-bottom: 15px;
 }
 
 .question-input {
   width: 100%;
   padding: 12px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
+  border: 1px solid #E5E7EB;
+  border-radius: var(--radius);
   margin-bottom: 10px;
   font-size: 0.95rem;
 }
@@ -804,8 +768,8 @@ export default {
 .faq-item-editor textarea {
   width: 100%;
   padding: 12px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
+  border: 1px solid #E5E7EB;
+  border-radius: var(--radius);
   resize: vertical;
 }
 
@@ -824,8 +788,9 @@ export default {
 }
 
 .modal-content {
-  background: white;
-  border-radius: 16px;
+  background: var(--white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-hover);
   width: 90%;
   max-width: 500px;
   max-height: 90vh;
@@ -837,17 +802,24 @@ export default {
   justify-content: space-between;
   align-items: center;
   padding: 20px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid #E5E7EB;
 }
 
 .close-btn {
   width: 32px;
   height: 32px;
   border: none;
-  background: #f0f0f0;
-  border-radius: 50%;
+  background: #F3F4F6;
+  border-radius: var(--radius);
   cursor: pointer;
   font-size: 1.2rem;
+  color: var(--text-light);
+  transition: var(--transition);
+}
+
+.close-btn:hover {
+  background: #E5E7EB;
+  color: var(--text-dark);
 }
 
 .modal form {
@@ -862,7 +834,7 @@ export default {
   width: 100%;
   max-height: 200px;
   object-fit: cover;
-  border-radius: 8px;
+  border-radius: var(--radius);
   margin-top: 10px;
 }
 
@@ -871,6 +843,6 @@ export default {
   justify-content: flex-end;
   gap: 10px;
   padding-top: 20px;
-  border-top: 1px solid #eee;
+  border-top: 1px solid #E5E7EB;
 }
 </style>

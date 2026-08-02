@@ -30,12 +30,20 @@ export default {
 </script>
 
 <style>
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.3s ease;
+/* 路由切换：缓慢淡入（600ms，遵循极简设计规范） */
+.fade-enter-active {
+  transition: opacity 0.6s ease, transform 0.6s ease;
 }
 
-.fade-enter-from,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.fade-enter-from {
+  opacity: 0;
+  transform: translateY(12px);
+}
+
 .fade-leave-to {
   opacity: 0;
 }

@@ -1,4 +1,4 @@
-import { getApiUrl, DEFAULT_HEADERS, WITH_CREDENTIALS } from '@/config/api.js'
+import { getApiUrl, getAssetUrl, getAuthHeaders, DEFAULT_HEADERS, WITH_CREDENTIALS } from '@/config/api.js'
 
 // 简单的事件总线
 class EventBus {
@@ -42,27 +42,74 @@ export function showToast(message, type = 'info') {
  * @returns {Promise} 返回 JSON 数据
  */
 export async function apiRequest(url, options = {}) {
+  // 框架级选项（不传给 fetch）：
+  // - showError: 失败时是否自动 toast（默认 true）
+  // - unwrap: 响应为 envelope { code, message, data } 时是否自动拆包返回 data（默认 true）
+  // - auth: 保留给调用方语义标注（公开接口传 false），会随 fetch 配置透传（无害），当前凭证由 cookie 携带
+  const { showError = true, unwrap = true, ...fetchOptions } = options
+
   const defaultOptions = {
     headers: { ...DEFAULT_HEADERS },
     credentials: WITH_CREDENTIALS ? 'include' : 'same-origin'
   }
-  
-  if (options.body && !(options.body instanceof FormData)) {
+
+  if (fetchOptions.body && !(fetchOptions.body instanceof FormData)) {
     defaultOptions.headers['Content-Type'] = 'application/json'
   }
-  
+
   // 转换 URL，添加基础地址（如果配置了）
   const fullUrl = getApiUrl(url)
-  
+
+  let response
+  let json = null
   try {
-    const response = await fetch(fullUrl, { ...defaultOptions, ...options })
-    const data = await response.json()
-    
+    response = await fetch(fullUrl, { ...defaultOptions, ...fetchOptions })
+    json = await response.json().catch(() => null)
+  } catch (error) {
+    if (showError) showToast(error.message || '网络请求失败', 'error')
+    throw error
+  }
+
+  if (!response.ok) {
+    // 后端错误统一取 envelope 的 message（兼容旧的 error 字段）
+    const message = json?.message || json?.error || '请求失败'
+    const error = new Error(message)
+    error.displayMessage = message
+    error.status = response.status
+    if (showError) showToast(message, 'error')
+    throw error
+  }
+
+  // envelope 拆包：{ code, message, data } -> data
+  if (unwrap && json && typeof json === 'object' && 'code' in json && 'data' in json) {
+    return json.data
+  }
+  return json
+}
+
+/**
+ * 下载受保护/静态文件
+ * @param {string} path - 文件路径或完整 URL
+ * @param {string} filename - 保存文件名
+ */
+export async function downloadFile(path, filename = 'download') {
+  try {
+    const response = await fetch(getAssetUrl(path), {
+      headers: { ...getAuthHeaders() },
+      credentials: WITH_CREDENTIALS ? 'include' : 'same-origin'
+    })
     if (!response.ok) {
-      throw new Error(data.error || '请求失败')
+      throw new Error('文件下载失败')
     }
-    
-    return data
+    const blob = await response.blob()
+    const objectUrl = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = objectUrl
+    anchor.download = filename
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    URL.revokeObjectURL(objectUrl)
   } catch (error) {
     showToast(error.message, 'error')
     throw error

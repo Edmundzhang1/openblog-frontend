@@ -110,6 +110,6 @@ export default {
 }
 
 .lightbox-close:hover {
-  color: var(--primary-color);
+  color: var(--accent-color);
 }
 </style>
