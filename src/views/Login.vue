@@ -310,7 +310,7 @@ export default {
     },
     getRedirectTarget() {
       const redirect = this.$route.query.redirect
-      return typeof redirect === 'string' && redirect.startsWith('/') ? redirect : '/orders'
+      return typeof redirect === 'string' && redirect.startsWith('/') ? redirect : '/'
     },
     redirectAfterLogin(user) {
       return this.$router.replace(getPostLoginRoute(user, this.getRedirectTarget()))

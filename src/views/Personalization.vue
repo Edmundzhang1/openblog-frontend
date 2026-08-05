@@ -221,6 +221,30 @@
                   </div>
                 </div>
 
+                <div v-if="platformThemePresetOptions.length" class="preset-group">
+                  <div class="preset-group-header">
+                    <div>
+                      <h4>{{ copy.theme.platformTitle }}</h4>
+                      <p>{{ copy.theme.platformDesc }}</p>
+                    </div>
+                  </div>
+                  <div class="theme-presets">
+                    <button 
+                      v-for="preset in platformThemePresetOptions" 
+                      :key="preset.name"
+                      class="preset-btn"
+                      @click="applyPreset(preset)"
+                      :title="getPresetDisplayName(preset)"
+                    >
+                      <div class="preset-colors">
+                        <span class="color-dot" :style="{ background: preset.primaryColor }"></span>
+                        <span class="color-dot" :style="{ background: preset.accentColor }"></span>
+                      </div>
+                      <span class="preset-name">{{ getPresetDisplayName(preset) }}</span>
+                    </button>
+                  </div>
+                </div>
+
                 <div class="preset-group">
                   <div class="preset-group-header">
                     <div>
@@ -1020,6 +1044,7 @@ import {
   enterPreviewMode,
   buildGradientValue,
   getThemePresets,
+  fetchPlatformPresets,
   addThemePreset,
   removeThemePreset,
   fileToBase64,
@@ -1091,6 +1116,8 @@ const PERSONALIZATION_MESSAGES = {
       presetsTitle: '预设配色方案',
       builtInTitle: '内置方案',
       builtInDesc: '适合快速切换整体氛围',
+      platformTitle: '平台预设',
+      platformDesc: '由平台管理员发布的官方配色方案',
       customTitle: '自定义方案',
       customDesc: '这里会收纳你手动添加的配色方案',
       customCount: '{count} 个',
@@ -1392,6 +1419,8 @@ const PERSONALIZATION_MESSAGES = {
       presetsTitle: 'Preset Palettes',
       builtInTitle: 'Built-in Palettes',
       builtInDesc: 'Quickly switch the overall visual mood',
+      platformTitle: 'Platform',
+      platformDesc: 'Official palettes published by the platform team',
       customTitle: 'Custom Palettes',
       customDesc: 'Palettes you add manually will appear here',
       customCount: '{count} saved',
@@ -1706,6 +1735,8 @@ export default {
     const themePresetOptions = ref(getThemePresets())
     const builtInThemePresetOptions = computed(() => themePresetOptions.value.filter(preset => !preset.isCustom))
     const customThemePresetOptions = computed(() => themePresetOptions.value.filter(preset => preset.isCustom))
+    // 平台预设（管理后台发布），与内置方案一样不可删除
+    const platformThemePresetOptions = ref([])
     const currentThemePresetName = ref(getDefaultThemePresetName())
     const isEditingThemePresetName = ref(false)
     const themePresetNameInput = ref(null)
@@ -2971,6 +3002,11 @@ export default {
     onMounted(async () => {
       // 实时预览
       window.addEventListener('personalization-changed', handlePersonalizationChange)
+
+      // 平台预设（失败时静默为空列表）
+      fetchPlatformPresets().then(list => {
+        platformThemePresetOptions.value = list
+      })
       
       // v2: 从后端加载配置并合并
       try {
@@ -3089,6 +3125,7 @@ export default {
       themePresetOptions,
       builtInThemePresetOptions,
       customThemePresetOptions,
+      platformThemePresetOptions,
       customPresetCountLabel,
       currentThemePresetName,
       isEditingThemePresetName,

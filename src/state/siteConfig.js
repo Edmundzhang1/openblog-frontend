@@ -8,6 +8,7 @@
  */
 import { reactive } from 'vue'
 import { getApiUrl, API_ENDPOINTS } from '../config/api.js'
+import { applyPlatformTheme, clearPlatformTheme } from '../utils/personalization.js'
 
 export const siteConfig = reactive({
   site_name: 'OpenBlog',
@@ -45,7 +46,8 @@ export async function refreshSiteConfig() {
   if (refreshing) return refreshing
 
   refreshing = (async () => {
-    const candidates = [API_ENDPOINTS.SITE_CONFIG, '/site/home']
+    // /site/home 为公开接口；/site/config 无公开路由，放在后面仅作兜底
+    const candidates = ['/site/home', API_ENDPOINTS.SITE_CONFIG]
     for (const url of candidates) {
       try {
         const data = await fetchConfig(url)
@@ -58,6 +60,12 @@ export async function refreshSiteConfig() {
           }
           if (data.updated_at) {
             siteConfig.updated_at = data.updated_at
+          }
+          // 平台主题：存在则应用为全站基准主题；之前应用过而现在缺失则清除
+          if (data.platform_theme && typeof data.platform_theme === 'object') {
+            applyPlatformTheme(data.platform_theme)
+          } else {
+            clearPlatformTheme()
           }
           return siteConfig
         }

@@ -3,12 +3,12 @@
     <div class="container">
       <!-- ==================== 左侧区域 ==================== -->
       <div class="nav-left">
-        <!-- 空间态：返回主站按钮（仅访客态显示，主人态隐藏）-->
+        <!-- 空间态：返回自己主页按钮（仅访客态显示，主人态隐藏）-->
         <button 
           v-if="isSpaceMode && currentSlug && !isSpaceOwner" 
           class="btn-exit-space"
           @click="exitSpace"
-          title="返回主站"
+          title="返回我的主页"
         >
           返回
         </button>
@@ -48,7 +48,7 @@
             @click.prevent="goToChatWithArtist"
             :class="{ active: isActiveRoute('Chat') }"
           >
-            私信
+            私信画师
           </a>
         </div>
       </div>
@@ -124,15 +124,15 @@
           <transition name="fade">
             <div class="dropdown-menu user-menu" v-show="showUserDropdown">
               <router-link v-if="primaryMenuTarget" :to="primaryMenuTarget">{{ primaryMenuLabel || '菜单' }}</router-link>
-              <!-- 画师：排期管理入口（v2） -->
-              <router-link v-if="isArtist || isAdmin" to="/todo">排期管理</router-link>
+              <!-- 画师：排期管理入口（v2）；admin 做纯粹管理，不显示 -->
+              <router-link v-if="isArtist" to="/todo">排期管理</router-link>
               <!-- 普通用户：显示申请成为画师入口 -->
               <router-link v-if="!isArtist && !isAdmin" to="/apply-artist">申请成为画师</router-link>
               <router-link to="/orders">{{ $t('nav.orders') || '订单' }}</router-link>
               <router-link to="/chat">{{ $t('nav.chat') || '消息' }}</router-link>
               <router-link to="/notifications">{{ notificationLabel }}</router-link>
-              <!-- 所有登录用户：我的主页入口（slug 未设置时回退 uid） -->
-              <router-link v-if="mySlug && !isSpaceOwner" :to="`/@${mySlug}`">{{ myPageLabel }}</router-link>
+              <!-- 登录用户（admin 除外）：我的主页入口（slug 未设置时回退 uid） -->
+              <router-link v-if="mySlug && !isSpaceOwner && !isAdmin" :to="`/@${mySlug}`">{{ myPageLabel }}</router-link>
               <!-- 空间主人：显示装修入口 -->
               <router-link v-if="isSpaceOwner" :to="`/@${currentSlug}/personalization`">装修空间</router-link>
               <button @click="handleLogout" class="logout-btn">{{ $t('nav.logout') || '退出登录' }}</button>
@@ -152,9 +152,9 @@
     <!-- ==================== 移动端菜单 ==================== -->
     <transition name="slide">
       <div v-if="showMobileMenu" class="mobile-menu">
-        <!-- 返回主站 -->
+        <!-- 返回我的主页 -->
         <button v-if="isSpaceMode && currentSlug" class="mobile-exit-btn" @click="exitSpace">
-          返回主站
+          返回我的主页
         </button>
         
         <!-- 业务菜单 -->
@@ -172,19 +172,19 @@
           @click.prevent="goToChatWithArtist(); showMobileMenu = false"
           :class="{ active: isActiveRoute('Chat') }"
         >
-          私信
+          私信画师
         </a>
         
         <!-- 全局私有路由（登录用户） -->
         <template v-if="isLoggedIn">
           <hr class="mobile-divider">
-          <router-link v-if="isLoggedIn && mySlug" :to="`/@${mySlug}`" @click="showMobileMenu = false">{{ myPageLabel }}</router-link>
+          <router-link v-if="isLoggedIn && mySlug && !isAdmin" :to="`/@${mySlug}`" @click="showMobileMenu = false">{{ myPageLabel }}</router-link>
           <router-link v-if="!isArtist && !isAdmin" to="/apply-artist" @click="showMobileMenu = false">申请成为画师</router-link>
           <router-link v-if="isArtist" to="/studio" @click="showMobileMenu = false">画师工作台</router-link>
           <router-link to="/orders" @click="showMobileMenu = false">订单</router-link>
           <router-link to="/chat" @click="showMobileMenu = false">消息</router-link>
           <router-link to="/notifications" @click="showMobileMenu = false">{{ notificationLabel }}</router-link>
-          <router-link v-if="isArtist || isAdmin" to="/todo" @click="showMobileMenu = false">排期</router-link>
+          <router-link v-if="isArtist" to="/todo" @click="showMobileMenu = false">排期</router-link>
         </template>
         
         <!-- 个性化按钮 -->
@@ -219,7 +219,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { Bell } from '@lucide/vue'
 import { showToast, eventBus, apiRequest } from '../utils/eventBus'
 import { API_ENDPOINTS } from '../config/api'
-import { AUTH_CHANGED_EVENT, clearSession, getCurrentUser, isAuthenticated } from '../utils/auth'
+import { AUTH_CHANGED_EVENT, clearSession, getCurrentUser, getPostLoginRoute, isAuthenticated } from '../utils/auth'
 import { siteConfig } from '../state/siteConfig'
 
 // ==================== 路由相关 ====================
@@ -386,7 +386,9 @@ const spaceMenuItems = computed(() => {
       { name: 'SpaceGallery', path: `/@${slug}/gallery`, label: '作品展示' },
       { name: 'SpaceBlog', path: `/@${slug}/blog`, label: '动态' },
       { name: 'SpaceAbout', path: `/@${slug}/about`, label: '关于' },
-      { name: 'SpaceContact', path: `/@${slug}/contact`, label: '联系' }
+      { name: 'SpaceContact', path: `/@${slug}/contact`, label: '联系' },
+      // 画师名录（空间内子路由，浏览画师时不跳出空间、navbar 不跳变）
+      { name: 'SpaceArtists', path: `/@${slug}/artists`, label: '画师' }
       // 注意：订单、消息、日程是【全局私有路由】，不在空间菜单中
     ]
     
@@ -396,11 +398,9 @@ const spaceMenuItems = computed(() => {
       ? all.filter((item) => item.name !== 'SpaceCommission')
       : all
     
-    // 🔥 普通用户登录后在"联系"旁边显示网站私信入口
-    if (isLoggedIn.value && !isSpaceOwner.value) {
-      items.push({ name: 'Chat', path: '/chat', label: '私信' })
-    }
-    
+    // 注意：不再向空间菜单追加「私信」入口——私信画师由模板中的独立链接承担，
+    // 消息中心入口在用户菜单里，避免空间导航出现两个「私信」
+
     return items
   } catch (e) {
     console.error('[NavBar] spaceMenuItems 计算出错:', e)
@@ -414,7 +414,6 @@ const platformMenuItems = computed(() => {
     return [
       { name: 'Home', path: '/', label: i18n?.t('nav.home') || '首页' },
       { name: 'Artists', path: '/artists', label: i18n?.t('nav.artists') || '画师' },
-      { name: 'Commission', path: '/commission', label: i18n?.t('nav.commission') || '约稿' },
       { name: 'Gallery', path: '/gallery', label: i18n?.t('nav.gallery') || '作品' },
       { name: 'OrderTracking', path: '/orders', label: i18n?.t('nav.orders') || '订单' },
       { name: 'Blog', path: '/blog', label: i18n?.t('nav.blog') || '动态' },
@@ -607,12 +606,14 @@ const goToChatWithArtist = async () => {
 const exitSpace = async () => {
   showMobileMenu.value = false
   showUserDropdown.value = false
-  
+
+  // 返回自己的主页：画师回自己的空间，普通用户回个人中心，管理员回后台
+  const target = getPostLoginRoute(currentUser.value, '/')
   try {
-    await router.push('/')
+    await router.push(target)
   } catch (e) {
     console.error('[NavBar] exitSpace 路由跳转失败:', e)
-    window.location.href = '/'
+    window.location.href = target
   }
 }
 </script>
@@ -649,13 +650,16 @@ const exitSpace = async () => {
 
 /* 退出空间按钮 */
 .btn-exit-space {
-  width: 36px;
+  min-width: 36px;
+  width: auto;
+  padding: 0 10px;
   height: 36px;
   background: var(--secondary-color);
   border: none;
   border-radius: var(--radius);
   cursor: pointer;
-  font-size: 1.2rem;
+  font-size: 0.9rem;
+  white-space: nowrap;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -733,16 +737,18 @@ const exitSpace = async () => {
 .nav-center {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 4px;
 }
 
 .nav-center a {
   color: var(--text-dark);
   font-weight: 500;
   text-decoration: none;
-  padding: 8px 16px;
+  padding: 8px 12px;
   border-radius: var(--radius);
   transition: var(--transition);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .nav-center a:hover {

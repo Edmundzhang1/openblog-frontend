@@ -1,11 +1,12 @@
 <template>
   <div id="app">
     <Navbar />
-    <router-view v-slot="{ Component }">
-      <transition name="fade" mode="out-in">
-        <component :is="Component" />
-      </transition>
-    </router-view>
+    <!--
+      不包 <transition>：空间布局等含嵌套 router-view/条件分支的组件会让
+      out-in 过渡的离场阶段无法正常完成，导致目标页空白。
+      页面级淡入由各视图的 .fade-in 类承担。
+    -->
+    <router-view />
     <Footer />
     <Lightbox />
     <Toast />

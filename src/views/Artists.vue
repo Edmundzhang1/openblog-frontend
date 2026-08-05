@@ -9,6 +9,9 @@
 
     <section class="artists-section">
       <div class="container">
+        <!-- 画师搜索 -->
+        <ArtistSearch />
+
         <div v-if="loading" class="inline-state">{{ content.loading }}</div>
         <div v-else-if="error" class="inline-state error-state">
           <p>{{ error }}</p>
@@ -55,6 +58,7 @@
 import { inject } from 'vue'
 import { API_ENDPOINTS, getAssetUrl } from '../config/api'
 import { apiRequest } from '../utils/eventBus'
+import ArtistSearch from '../components/ArtistSearch.vue'
 
 const PAGE_SIZE = 12
 
@@ -89,6 +93,7 @@ const CONTENT = {
 
 export default {
   name: 'Artists',
+  components: { ArtistSearch },
   setup() {
     return { i18n: inject('i18n') }
   },

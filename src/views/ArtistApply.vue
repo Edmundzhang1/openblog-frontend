@@ -44,6 +44,20 @@
             >
               {{ content.addUrl }} ({{ form.portfolioUrls.length }}/{{ maxUrls }})
             </button>
+
+            <!-- 或直接上传作品文件（图片 / zip / pdf） -->
+            <div class="upload-or">{{ content.uploadOr }}</div>
+            <div class="file-upload" @click="triggerFileInput">
+              <input
+                ref="fileInput"
+                type="file"
+                multiple
+                accept="image/*,.zip,.pdf"
+                @change="handleFiles"
+              >
+              <div class="file-upload-icon">📎</div>
+              <p>{{ uploading ? content.uploading : content.uploadHint }}</p>
+            </div>
           </div>
 
           <div class="form-card">
@@ -96,6 +110,10 @@ const CONTENT = {
     backHome: '返回首页',
     urlRequired: '请至少填写一个有效的作品集链接',
     urlInvalid: '作品集链接格式不正确',
+    uploadOr: '或直接上传作品文件',
+    uploadHint: '点击选择文件上传（支持图片、zip、pdf，可多选）',
+    uploading: '上传中...',
+    uploadFailed: '文件上传失败，请稍后重试',
     reasonRequired: `申请理由至少需要 ${MIN_REASON_LENGTH} 个字`,
     submitFailed: '提交失败，请稍后重试'
   },
@@ -116,6 +134,10 @@ const CONTENT = {
     backHome: 'Back to Home',
     urlRequired: 'Please provide at least one valid portfolio link',
     urlInvalid: 'Invalid portfolio link format',
+    uploadOr: 'Or upload your work files',
+    uploadHint: 'Click to upload files (images, zip, pdf; multiple allowed)',
+    uploading: 'Uploading...',
+    uploadFailed: 'File upload failed, please try again later',
     reasonRequired: `Reason must be at least ${MIN_REASON_LENGTH} characters`,
     submitFailed: 'Submission failed, please try again later'
   }
@@ -137,6 +159,7 @@ export default {
       },
       submitting: false,
       submitted: false,
+      uploading: false,
       formError: ''
     }
   },
@@ -162,10 +185,41 @@ export default {
         this.form.portfolioUrls.splice(index, 1)
       }
     },
+    triggerFileInput() {
+      this.$refs.fileInput.click()
+    },
+    async handleFiles(event) {
+      const files = Array.from(event.target.files || [])
+      event.target.value = ''
+      if (!files.length) return
+
+      this.uploading = true
+      try {
+        for (const file of files) {
+          if (this.form.portfolioUrls.filter(Boolean).length >= MAX_URLS) break
+          const formData = new FormData()
+          formData.append('file', file)
+          const data = await apiRequest('/api/v1/upload', { method: 'POST', body: formData })
+          if (data?.url) {
+            const emptyIndex = this.form.portfolioUrls.findIndex(u => !u)
+            if (emptyIndex >= 0) {
+              this.form.portfolioUrls.splice(emptyIndex, 1, data.url)
+            } else if (this.form.portfolioUrls.length < MAX_URLS) {
+              this.form.portfolioUrls.push(data.url)
+            }
+          }
+        }
+      } catch (err) {
+        showToast(err?.message || this.content.uploadFailed, 'error')
+      } finally {
+        this.uploading = false
+      }
+    },
     validate() {
       const urls = this.form.portfolioUrls.filter(Boolean)
       if (!urls.length) return this.content.urlRequired
-      if (urls.some(url => !URL_RE.test(url))) return this.content.urlInvalid
+      // 站内上传的文件是相对路径（/uploads/...），外链必须是 http(s) 地址
+      if (urls.some(url => !URL_RE.test(url) && !url.startsWith('/uploads/'))) return this.content.urlInvalid
       if (this.form.reason.length < MIN_REASON_LENGTH) return this.content.reasonRequired
       return ''
     },
@@ -322,5 +376,17 @@ export default {
   color: var(--text-light);
   max-width: 420px;
   margin: 0 auto 32px;
+}
+
+.upload-or {
+  margin: 24px 0 12px;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.file-upload.uploading {
+  opacity: 0.6;
+  pointer-events: none;
 }
 </style>

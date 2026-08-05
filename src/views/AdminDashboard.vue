@@ -350,6 +350,22 @@
           </button>
         </div>
       </section>
+
+      <section v-show="activeTab === 'artists'" class="admin-section">
+        <AdminArtists v-if="activeTab === 'artists'" />
+      </section>
+
+      <section v-show="activeTab === 'works'" class="admin-section">
+        <AdminWorks v-if="activeTab === 'works'" />
+      </section>
+
+      <section v-show="activeTab === 'pages'" class="admin-section">
+        <AdminPages v-if="activeTab === 'pages'" />
+      </section>
+
+      <section v-show="activeTab === 'themes'" class="admin-section">
+        <AdminThemes v-if="activeTab === 'themes'" />
+      </section>
     </div>
 
     <!-- 修改主页路径弹窗 -->
@@ -394,11 +410,15 @@ import { API_ENDPOINTS } from '../config/api'
 import { apiRequest, showToast } from '../utils/eventBus'
 import { getCurrentUser } from '../utils/auth'
 import { refreshSiteConfig } from '../state/siteConfig'
+import AdminArtists from '../components/admin/AdminArtists.vue'
+import AdminWorks from '../components/admin/AdminWorks.vue'
+import AdminPages from '../components/admin/AdminPages.vue'
+import AdminThemes from '../components/admin/AdminThemes.vue'
 
 const CONTENT = {
   zh: {
     title: '管理后台', subtitle: '平台总览、站点信息、访问黑名单、画师入驻审核与用户管理', defaultAdmin: '管理员', refresh: '全部刷新',
-    tabs: { stats: '总览', config: '站点配置', blacklist: '黑名单', applications: '画师审批', users: '用户管理' },
+    tabs: { stats: '总览', config: '站点配置', blacklist: '黑名单', applications: '画师审批', users: '用户管理', artists: '画师名录', works: '作品管理', pages: '页面内容', themes: '主题预设' },
     loading: '加载中...', retry: '重新加载',
     statsTitle: '平台总览', statsHint: '关键指标一览', totalUsers: '总用户', clientUsers: '普通用户', artistUsers: '画师', adminUsers: '管理员', pendingApplications: '待审核申请',
     configTitle: '站点配置', configHint: '修改公开展示的站点基本信息', updated: '更新于',
@@ -419,7 +439,7 @@ const CONTENT = {
   },
   en: {
     title: 'Admin Dashboard', subtitle: 'Platform overview, site information, access blocks, artist applications, and user management', defaultAdmin: 'Administrator', refresh: 'Refresh all',
-    tabs: { stats: 'Overview', config: 'Site Config', blacklist: 'Blacklist', applications: 'Applications', users: 'Users' },
+    tabs: { stats: 'Overview', config: 'Site Config', blacklist: 'Blacklist', applications: 'Applications', users: 'Users', artists: 'Directory', works: 'Works', pages: 'Pages', themes: 'Themes' },
     loading: 'Loading...', retry: 'Try again',
     statsTitle: 'Platform Overview', statsHint: 'Key metrics at a glance', totalUsers: 'Total users', clientUsers: 'Clients', artistUsers: 'Artists', adminUsers: 'Admins', pendingApplications: 'Pending applications',
     configTitle: 'Site Configuration', configHint: 'Edit public-facing site information', updated: 'Updated',
@@ -450,7 +470,7 @@ function emptyStats() {
 
 export default {
   name: 'AdminDashboard',
-  components: { RefreshCw, Trash2, Users, User, Palette, ShieldCheck, Clock },
+  components: { RefreshCw, Trash2, Users, User, Palette, ShieldCheck, Clock, AdminArtists, AdminWorks, AdminPages, AdminThemes },
   setup() { return { i18n: inject('i18n') } },
   data() {
     return {
@@ -469,7 +489,7 @@ export default {
     locale() { return this.i18n.getLocale() },
     copy() { return CONTENT[this.locale] },
     tabs() {
-      return ['stats', 'config', 'blacklist', 'applications', 'users'].map((key) => ({ key, label: this.copy.tabs[key] }))
+      return ['stats', 'config', 'blacklist', 'applications', 'users', 'artists', 'works', 'pages', 'themes'].map((key) => ({ key, label: this.copy.tabs[key] }))
     },
     loadingAll() {
       return this.loadingStats || this.loadingConfig || this.loadingBlacklist || this.loadingApplications || this.loadingUsers

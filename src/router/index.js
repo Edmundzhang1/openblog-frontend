@@ -3,6 +3,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import Home from '../views/Home.vue'
 import Login from '../views/Login.vue'
 import { getCurrentUser, getPostLoginRoute, isAdmin, isArtist, isAuthenticated } from '../utils/auth'
+import { applyRouteTheme } from '../utils/personalization.js'
 
 // ==================== 布局组件（v2） ====================
 import SpaceLayout from '../views/Space.vue'  // 画师空间布局壳子（/@slug 的壳，保持静态）
@@ -28,19 +29,10 @@ const routes = [
     meta: { guestOnly: true, hideNavBar: true }
   },
 
-  // 普通用户首页（登录后，v2）
   {
-    path: '/dashboard',
-    name: 'UserDashboard',
-    component: () => import('../views/UserDashboard.vue'),
-    meta: { requiresAuth: true, role: 'CLIENT' }
-  },
-
-  {
+    // 约稿功能收拢到画师主页使用，旧链接重定向到画师名录
     path: '/commission',
-    name: 'Commission',
-    component: () => import('../views/Commission.vue'),
-    meta: { requiresAuth: true }
+    redirect: '/artists'
   },
   {
     path: '/gallery',
@@ -101,10 +93,10 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
-    path: '/todo',             // 排期/日程管理
+    path: '/todo',             // 排期/日程管理（画师专属，与后端权限一致）
     name: 'TodoList',
     component: () => import('../views/TodoList.vue'),
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true, requiresArtist: true }
   },
   {
     path: '/admin/space',      // 空间管理后台
@@ -188,6 +180,13 @@ const routes = [
         component: () => import('../views/space/SpaceContact.vue'),
         meta: { requiresAuth: false }
       },
+      // 画师名录（空间内浏览，路由带 slug，navbar 保持空间模式不跳变）
+      {
+        path: 'artists',
+        name: 'SpaceArtists',
+        component: () => import('../views/Artists.vue'),
+        meta: { requiresAuth: false }
+      },
       // 个性化装修 - 仅空间主人可访问
       {
         path: 'personalization',
@@ -251,8 +250,8 @@ router.beforeEach((to, from, next) => {
     return
   }
 
-  // 5. 需要画师权限
-  if (to.meta.requiresArtist && !isArtist(currentUser)) {
+  // 5. 需要画师权限（管理员代为维护时放行）
+  if (to.meta.requiresArtist && !isArtist(currentUser) && !isAdmin(currentUser)) {
     next('/orders')
     return
   }
@@ -268,6 +267,16 @@ router.beforeEach((to, from, next) => {
   }
 
   next()
+})
+
+// ==================== 路由级主题同步 ====================
+// 导航确认后执行（afterEach 不会在重定向中途触发）：
+// 离开空间路由时清除空间/装修预览残留的行内主题变量与 body 背景，恢复平台主题；
+// 进入空间路由时为无操作（空间配色由 Space.vue 的查看态逻辑负责）。
+// isSpaceRoute 判定与 Navbar 保持一致：params.slug 为非空字符串
+router.afterEach((to) => {
+  const isSpaceRoute = typeof to.params?.slug === 'string' && to.params.slug.length > 0
+  applyRouteTheme(isSpaceRoute)
 })
 
 export default router

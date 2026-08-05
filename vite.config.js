@@ -1,36 +1,42 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
-import { resolve } from 'path'
-
-// ============================================
-// OpenBlog 前端配置文件
-// ============================================
+import { fileURLToPath } from 'node:url'
 
 export default defineConfig(({ mode }) => {
-  // 加载环境变量
-  const env = process.env
-  const apiBaseUrl = env.VITE_API_BASE_URL || 'http://127.0.0.1:8080'
-  const devPort = parseInt(env.VITE_DEV_PORT) || 3000
+  const env = loadEnv(mode, process.cwd(), '')
+  const proxyTarget = env.VITE_DEV_PROXY_TARGET || 'http://127.0.0.1:8080'
+  const configuredPort = Number.parseInt(env.VITE_DEV_PORT, 10)
+  const devPort = Number.isInteger(configuredPort) ? configuredPort : 3000
 
   return {
     plugins: [vue()],
     resolve: {
       alias: {
-        '@': resolve(__dirname, 'src')
+        '@': fileURLToPath(new URL('./src', import.meta.url))
       }
     },
     server: {
       host: '0.0.0.0',
       port: devPort,
       strictPort: true,
-      // 代理配置
       proxy: {
         '/api': {
-          target: apiBaseUrl,
-          changeOrigin: true
+          target: proxyTarget,
+          changeOrigin: true,
+          // WebSocket 升级支持（/api/v1/ws 实时聊天）
+          ws: true,
+          // 透传原始 Host，后端 WebSocket 同源校验依赖 X-Forwarded-Host
+          xfwd: true,
+          // 路径重写：将 /api/xxx 重写成 /api/v1/xxx（如果前端请求不带 /v1）
+          rewrite: (path) => {
+            // 如果路径已经是 /api/v1/xxx，保持不变
+            if (path.startsWith('/api/v1/')) return path
+            // 否则添加 /v1 前缀
+            return path.replace(/^\/api\//, '/api/v1/')
+          }
         },
         '/uploads': {
-          target: apiBaseUrl,
+          target: proxyTarget,
           changeOrigin: true
         }
       }
@@ -38,10 +44,6 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',
       emptyOutDir: true
-    },
-    define: {
-      // 将 API 基础地址注入到应用中
-      __API_BASE_URL__: JSON.stringify(apiBaseUrl)
     }
   }
 })

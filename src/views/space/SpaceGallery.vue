@@ -125,7 +125,7 @@ export default {
 
       try {
         const res = await getPublicWorksAPI(slug)
-        const list = Array.isArray(res.data) ? res.data : (res.data?.items || [])
+        const list = Array.isArray(res.data) ? res.data : (res.data?.items || res.data?.list || [])
         this.works = list.map(work => ({
           id: work.id,
           title: work.title || '',

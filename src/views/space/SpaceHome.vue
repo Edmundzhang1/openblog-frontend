@@ -35,8 +35,16 @@
     </section>
 
     <!-- 排单与日历 -->
-    <section v-if="sectionKey === 'calendar' && (isModuleVisible('calendar') || isModuleVisible('commission'))" class="schedule-section">
+    <!-- 空间主本人可见约稿日历（client/artist 都有，仅自己查看）；排单日历仅画师空间对外展示 -->
+    <section v-if="sectionKey === 'calendar' && (isModuleVisible('calendar') || isModuleVisible('commission')) && (isSpaceOwner || isArtistSpace)" class="schedule-section">
       <div class="container">
+        <!-- 画师本人：约稿日历/排单日历切换，一次只看一个 -->
+        <div v-if="isArtistOwner" class="calendar-mode-toggle">
+          <button :class="{ active: calendarMode === 'orders' }" @click="calendarMode = 'orders'">约稿日历</button>
+          <button :class="{ active: calendarMode === 'schedule' }" @click="calendarMode = 'schedule'">排单日历</button>
+        </div>
+        <OrderCalendar v-if="isSpaceOwner && calendarMode === 'orders'" />
+        <template v-if="!isSpaceOwner || calendarMode === 'schedule'">
         <div class="section-title">
           <h2>{{ content.scheduleTitle }}</h2>
           <p>{{ content.scheduleDesc }}</p>
@@ -158,6 +166,7 @@
             </div>
           </div>
         </div>
+        </template>
       </div>
     </section>
 
@@ -188,7 +197,7 @@
             {{ tab.label }}
           </button>
         </div>
-        <div class="masonry-grid">
+        <div class="masonry-grid" v-if="filteredGallery.length > 0">
           <div
             v-for="item in filteredGallery"
             :key="item.id"
@@ -202,6 +211,7 @@
             </div>
           </div>
         </div>
+        <p v-else class="gallery-empty">{{ content.galleryEmpty }}</p>
       </div>
     </section>
 
@@ -292,7 +302,8 @@
             <div v-if="commission.note" class="commission-note">📝 {{ commission.note }}</div>
           </div>
         </div>
-        <div class="modal-footer-hint">
+        <!-- 仅空间主本人可见排期编辑入口，游客/访客只能查看 -->
+        <div v-if="isSpaceOwner" class="modal-footer-hint">
           <router-link to="/todo" class="btn btn-primary btn-full">去排期管理编辑</router-link>
         </div>
       </div>
@@ -332,12 +343,13 @@
 import { inject, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { Calendar } from '../../utils/calendar'
 import { eventBus, showToast } from '../../utils/eventBus'
-import { getPersonalization, applyTheme, applyBackground, exitPreviewMode, isPreviewModeActive, sanitizeHTML, sanitizeCSS, clearViewingPersonalization } from '../../utils/personalization.js'
+import { getPersonalization, applyTheme, applyBackground, exitPreviewMode, isPreviewModeActive, sanitizeHTML, sanitizeCSS } from '../../utils/personalization.js'
 import { getPublicSchedulesAPI } from '@/api/calendar.js'
 import { getPublicArtStylesAPI, getPublicWorkloadAPI, getPublicMonthNotesAPI } from '@/api/todo.js'
 import { getPublicWorksAPI, getPublicMomentsAPI } from '@/api/artist.js'
 import { getPublicAvailableDatesAPI, getMyAvailableDatesAPI } from '@/api/availableDate.js'
 import { HOME_IMAGES, IMAGES } from '../../config/assets.js'
+import OrderCalendar from '../../components/OrderCalendar.vue'
 
 const HOME_CONTENT = {
   zh: {
@@ -350,6 +362,7 @@ const HOME_CONTENT = {
     addTodo: '添加',
     galleryTitle: '画风展示',
     galleryDesc: '点击标签查看不同风格的示例作品',
+    galleryEmpty: '暂无作品',
     momentsTitle: '最新动态',
     momentsDesc: '画师的近况与公告',
     momentsEmpty: '暂无动态',
@@ -423,6 +436,7 @@ const HOME_CONTENT = {
     addTodo: 'Add',
     galleryTitle: 'Style Gallery',
     galleryDesc: 'Switch tabs to browse sample works in different styles',
+    galleryEmpty: 'No works yet',
     momentsTitle: 'Latest Moments',
     momentsDesc: 'Updates and announcements from the artist',
     momentsEmpty: 'No moments yet',
@@ -490,9 +504,11 @@ const HOME_CONTENT = {
 
 export default {
   name: 'Home',
+  components: { OrderCalendar },
   setup() {
     const i18n = inject('i18n')
     const artistInfo = inject('artistInfo', ref(null))
+    const isSpaceOwner = inject('isSpaceOwner', ref(false))
     const personalization = ref(getPersonalization())
     const previewMode = ref(isPreviewModeActive())
     
@@ -547,15 +563,16 @@ export default {
       window.removeEventListener('personalization-changed', handlePersonalizationChange)
       window.removeEventListener('personalization-preview-changed', handlePreviewModeChange)
       removeCustomCSS()
-      // 离开空间页时还原访客查看配置，避免污染其他页面
-      clearViewingPersonalization()
+      // 查看态的清除已上移到空间壳 Space.vue（覆盖所有空间子页面）
     })
 
-    return { i18n, artistInfo, personalization, previewMode, sanitizeHTML }
+    return { i18n, artistInfo, isSpaceOwner, personalization, previewMode, sanitizeHTML }
   },
   data() {
     return {
       currentSlide: 0,
+      // 日历模式：orders=约稿日历（默认，仅自己可见）/ schedule=排单日历（画师可切换）
+      calendarMode: 'orders',
       autoplayTimer: null,
       calendar: new Calendar(),
       calendarData: { year: 2026, month: 3, days: [] },
@@ -601,6 +618,14 @@ export default {
   computed: {
     locale() {
       return this.i18n.getLocale()
+    },
+    // 空间主是否为画师（排单日历只对画师空间展示，其他人可见）
+    isArtistSpace() {
+      return String(this.artistInfo?.role || '').toUpperCase() === 'ARTIST'
+    },
+    // 当前登录用户本人是画师且在查看自己的空间：可切换约稿/排单日历
+    isArtistOwner() {
+      return this.isSpaceOwner && this.isArtistSpace
     },
     content() {
       return HOME_CONTENT[this.locale]
@@ -1036,18 +1061,29 @@ export default {
             this.todoCommissions = res.data.list.map(event => {
               // 🔥 关键：通过排单的 color 匹配 todoStyles 里的画风
               const matchedStyle = this.todoStyles.find(s => s.color === event.color)
-              
+
               // 🔥 修复：提取日期部分（YYYY-MM-DD）用于匹配
               const dateOnly = event.start_time ? event.start_time.split('T')[0] : ''
-              
+
+              // 🔥 TodoList 写入的排单事件：content 为 '@c:' + JSON（style_id/quantity/note/status）
+              let extra = null
+              if (typeof event.content === 'string' && event.content.startsWith('@c:')) {
+                try {
+                  extra = JSON.parse(event.content.slice(3)) || {}
+                } catch {
+                  extra = {}
+                }
+              }
+
               return {
                 id: event.id,
                 date: dateOnly,
                 clientName: event.title.split(' - ')[0] || '',
                 styleId: matchedStyle ? matchedStyle.id : null,
-                quantity: 1,
-                note: event.content,
-                status: 'pending',
+                // 工作量 = 画风天数 × 数量，数量从 content JSON 解析（默认 1）
+                quantity: extra ? (Number(extra.quantity) || 1) : 1,
+                note: extra ? (extra.note || '') : event.content,
+                status: extra ? (extra.status || 'pending') : 'pending',
                 color: event.color
               }
             })
@@ -1266,10 +1302,11 @@ export default {
     },
     async loadCommissions() {
       try {
-        const res = await fetch('/api/commissions')
+        const res = await fetch('/api/v1/commissions')
         if (res.ok) {
-          const data = await res.json()
-          this.commissions = data.commissions || []
+          const json = await res.json()
+          // 后端统一响应信封 { code, message, data: { commissions } }
+          this.commissions = json.data?.commissions || []
           this.updateAvailableSlots()
         }
       } catch (e) {
@@ -1435,6 +1472,35 @@ export default {
 .schedule-container.schedule-single {
   grid-template-columns: 1fr;
   max-width: 640px;
+}
+
+/* 约稿日历/排单日历切换（仅画师本人可见） */
+.calendar-mode-toggle {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.calendar-mode-toggle button {
+  padding: 8px 20px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--white);
+  color: var(--text-light);
+  font-size: 0.9rem;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  transition: var(--transition);
+}
+
+.calendar-mode-toggle button:hover {
+  color: var(--primary-color);
+}
+
+.calendar-mode-toggle button.active {
+  background: var(--primary-color);
+  color: var(--white);
 }
 
 /* 日历 */
@@ -2126,35 +2192,42 @@ export default {
   color: var(--white);
 }
 
+/* 作品网格：自适应列数，统一卡片比例，任意数量作品都能整齐铺满 */
 .masonry-grid {
-  column-count: 4;
-  column-gap: 20px;
-}
-
-@media (max-width: 1024px) {
-  .masonry-grid { column-count: 3; }
-}
-
-@media (max-width: 768px) {
-  .masonry-grid { column-count: 2; }
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 20px;
 }
 
 @media (max-width: 480px) {
-  .masonry-grid { column-count: 1; }
+  .masonry-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
 }
 
 .masonry-item {
-  break-inside: avoid;
-  margin-bottom: 20px;
   position: relative;
   border-radius: var(--radius);
   overflow: hidden;
   cursor: pointer;
+  aspect-ratio: 4 / 5;
+  background: var(--bg-light);
 }
 
 .masonry-item img {
   width: 100%;
+  height: 100%;
+  object-fit: cover;
   display: block;
+  transition: var(--transition);
+}
+
+.masonry-item:hover img {
+  transform: scale(1.03);
+}
+
+.gallery-empty {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 40px 0;
 }
 
 .masonry-item-overlay {

@@ -100,6 +100,7 @@ import {
   ShieldCheck,
   Sparkles
 } from '@lucide/vue'
+import { fetchPlatformPages } from '../utils/platformPages'
 
 const ABOUT_CONTENT = {
   zh: {
@@ -212,7 +213,9 @@ export default {
       philosophy: [],
       team: [],
       services: [],
-      process: []
+      process: [],
+      // 平台配置的关于页内容（platform_pages.platform_about，{ zh, en }），获取失败保持 null 使用内置内容
+      platformAbout: null
     }
   },
   computed: {
@@ -220,12 +223,17 @@ export default {
       return this.i18n.getLocale()
     },
     content() {
-      return ABOUT_CONTENT[this.locale]
+      return this.contentFor(this.locale)
     }
   },
   mounted() {
     this.applyLocaleContent(this.locale)
     window.addEventListener('locale-changed', this.handleLocaleChange)
+    // 拉取平台配置的页面内容，失败或缺省时静默回退到内置内容
+    fetchPlatformPages().then(pages => {
+      this.platformAbout = pages?.platform_about || null
+      this.applyLocaleContent(this.locale)
+    })
   },
   beforeUnmount() {
     window.removeEventListener('locale-changed', this.handleLocaleChange)
@@ -234,13 +242,21 @@ export default {
     handleLocaleChange(event) {
       this.applyLocaleContent(event.detail)
     },
+    // 合并指定语言的内容：平台配置优先，缺省字段回落到内置默认
+    contentFor(locale) {
+      const base = ABOUT_CONTENT[locale]
+      const override = this.platformAbout?.[locale]
+      return override ? { ...base, ...override } : base
+    },
     applyLocaleContent(locale) {
-      const content = ABOUT_CONTENT[locale]
+      const base = ABOUT_CONTENT[locale]
+      const content = this.contentFor(locale)
       this.sections = content.sections
       this.history = content.history
       this.philosophy = content.philosophy
-      this.team = content.team
-      this.services = content.services
+      // icon 组件不可 JSON 化，按索引从内置默认内容回填
+      this.team = (content.team || []).map((member, index) => ({ ...member, icon: base.team[index]?.icon }))
+      this.services = (content.services || []).map((service, index) => ({ ...service, icon: base.services[index]?.icon }))
       this.process = content.process
     },
     stepLabel(index) {

@@ -9,7 +9,7 @@
 
     <section class="gallery-section">
       <div class="container">
-        <div class="gallery-filter">
+        <div v-if="!works" class="gallery-filter">
           <button 
             v-for="filter in filters" 
             :key="filter.key"
@@ -23,15 +23,16 @@
 
         <div class="gallery-grid">
           <div 
-            v-for="item in filteredItems" 
+            v-for="item in displayItems" 
             :key="item.id"
             class="gallery-item"
             @click="openLightbox(item.image)"
           >
-            <img :src="item.image" :alt="item.title">
+            <img :src="item.image" :alt="item.intro || item.title">
             <div class="gallery-item-info">
-              <h4>{{ item.title }}</h4>
-              <span class="tag">{{ getCategoryName(item.category) }}</span>
+              <h4>{{ item.intro || item.title }}</h4>
+              <span v-if="item.category" class="tag">{{ getCategoryName(item.category) }}</span>
+              <p v-if="item.artist" class="artist-name">{{ item.artist }}</p>
             </div>
           </div>
         </div>
@@ -41,7 +42,8 @@
 </template>
 
 <script>
-import { eventBus } from '../utils/eventBus'
+import { eventBus, apiRequest } from '../utils/eventBus'
+import { API_ENDPOINTS, getAssetUrl } from '../config/api'
 import { inject } from 'vue'
 
 const GALLERY_CONTENT = {
@@ -113,7 +115,9 @@ export default {
   },
   data() {
     return {
-      activeFilter: 'all'
+      activeFilter: 'all',
+      // 接口返回的真实作品，null 表示使用内置示例内容
+      works: null
     }
   },
   computed: {
@@ -132,9 +136,36 @@ export default {
     filteredItems() {
       if (this.activeFilter === 'all') return this.items
       return this.items.filter(item => item.category === this.activeFilter)
+    },
+    // 优先渲染接口作品；接口失败或为空时回退到内置示例内容
+    displayItems() {
+      return this.works || this.filteredItems
     }
   },
+  mounted() {
+    this.loadWorks()
+  },
   methods: {
+    async loadWorks() {
+      try {
+        const params = new URLSearchParams()
+        params.append('page', '1')
+        params.append('page_size', '60')
+        const data = await apiRequest(`${API_ENDPOINTS.GALLERY}?${params.toString()}`, { auth: false, showError: false })
+        const list = Array.isArray(data?.list) ? data.list : []
+        // 平台作品只有图片与介绍，没有分类/画师字段
+        this.works = list.length
+          ? list.map(work => ({
+              id: `work-${work.id}`,
+              image: getAssetUrl(work.image_url),
+              intro: work.intro || ''
+            }))
+          : null
+      } catch (_) {
+        // 静默失败，回退到内置示例内容
+        this.works = null
+      }
+    },
     getCategoryName(category) {
       return this.content.categories[category] || category
     },
@@ -216,6 +247,12 @@ export default {
 .tag {
   font-size: 0.85rem;
   color: var(--text-muted);
+}
+
+.artist-name {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+  color: var(--text-light);
 }
 
 @media (max-width: 768px) {

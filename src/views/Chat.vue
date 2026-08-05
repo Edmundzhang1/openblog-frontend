@@ -46,39 +46,65 @@
               <p>{{ ordersError }}</p>
               <button type="button" class="text-button" @click="loadOrders">{{ copy.retry }}</button>
             </div>
-            <div v-else-if="orders.length" class="order-list">
-              <button
-                v-for="order in orders"
-                :key="order.order_id"
-                type="button"
-                class="order-item"
-                :class="{ active: selectedOrder?.order_id && selectedOrder?.order_id === order.order_id }"
-                @click="selectOrder(order)"
-              >
-                <span class="avatar" aria-hidden="true">
-                  <span>{{ initials(order.counterparty?.nickname) }}</span>
-                  <img
-                    v-if="order.counterparty?.avatar_url"
-                    :src="assetUrl(order.counterparty.avatar_url)"
-                    alt=""
-                    @error="hideBrokenImage"
-                  >
-                </span>
-                <span class="order-copy">
-                  <strong>{{ order.counterparty?.nickname || copy.unknownUser }}</strong>
-                  <span>{{ order.title }}</span>
-                  <small>{{ order.order_no }}</small>
-                </span>
-                <span class="order-meta">
-                  <small>{{ formatShortDate(order.created_at) }}</small>
-                  <span class="status-label" :class="statusClass(order.status)">{{ formatStatus(order.status) }}</span>
-                </span>
-              </button>
-            </div>
-            <div v-else class="sidebar-state">
-              <strong>{{ copy.emptyOrders }}</strong>
-              <p>{{ copy.emptyOrdersHint }}</p>
-              <router-link to="/commission" class="text-link">{{ copy.createCommission }}</router-link>
+            <div v-else class="sidebar-scroll">
+              <div v-if="orders.length" class="order-list">
+                <button
+                  v-for="order in orders"
+                  :key="order.order_id"
+                  type="button"
+                  class="order-item"
+                  :class="{ active: selectedOrder?.order_id && selectedOrder?.order_id === order.order_id }"
+                  @click="selectOrder(order)"
+                >
+                  <span class="avatar" aria-hidden="true">
+                    <span>{{ initials(order.counterparty?.nickname) }}</span>
+                    <img
+                      v-if="order.counterparty?.avatar_url"
+                      :src="assetUrl(order.counterparty.avatar_url)"
+                      alt=""
+                      @error="hideBrokenImage"
+                    >
+                  </span>
+                  <span class="order-copy">
+                    <strong>{{ order.counterparty?.nickname || copy.unknownUser }}</strong>
+                    <span>{{ order.title }}</span>
+                    <small>{{ order.order_no }}</small>
+                  </span>
+                  <span class="order-meta">
+                    <small>{{ formatShortDate(order.created_at) }}</small>
+                    <span class="status-label" :class="statusClass(order.status)">{{ formatStatus(order.status) }}</span>
+                  </span>
+                </button>
+              </div>
+              <div v-else class="sidebar-state">
+                <strong>{{ copy.emptyOrders }}</strong>
+                <p>{{ copy.emptyOrdersHint }}</p>
+                <router-link to="/commission" class="text-link">{{ copy.createCommission }}</router-link>
+              </div>
+              <!-- 无订单的私信线程（order_id=0），绑定订单的线程仍展示在上方订单列表 -->
+              <section v-if="dmThreads.length" class="dm-section">
+                <h3 class="dm-title">{{ copy.dmTitle }}</h3>
+                <button
+                  v-for="thread in dmThreads"
+                  :key="thread.thread_id"
+                  type="button"
+                  class="order-item"
+                  :class="{ active: currentThread?.thread_id && String(currentThread?.thread_id) === String(thread.thread_id) }"
+                  @click="selectDmThread(thread)"
+                >
+                  <span class="avatar" aria-hidden="true">
+                    <span>{{ initials(thread.other_user_name) }}</span>
+                  </span>
+                  <span class="order-copy">
+                    <strong>{{ thread.other_user_name || copy.unknownUser }}</strong>
+                    <span>{{ thread.last_message_preview }}</span>
+                  </span>
+                  <span class="order-meta">
+                    <small>{{ formatShortDate(thread.last_message_time) }}</small>
+                    <span v-if="thread.unread_count > 0" class="unread-badge">{{ thread.unread_count }}</span>
+                  </span>
+                </button>
+              </section>
             </div>
           </aside>
 
@@ -270,19 +296,18 @@
 import { inject } from 'vue'
 import { API_ENDPOINTS, getApiUrl, getAssetUrl } from '../config/api'
 import { apiRequest, showToast } from '../utils/eventBus'
-import { AUTH_CHANGED_EVENT, getAccessToken, getCurrentUser, getRefreshToken, updateTokens } from '../utils/auth'
+import { AUTH_CHANGED_EVENT, getAccessToken, getCurrentUser, getRefreshToken, refreshSession } from '../utils/auth'
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024
 const ALLOWED_FILE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'application/pdf', 'text/plain'])
 const ALLOWED_FILE_EXTENSIONS = /\.(jpe?g|png|gif|pdf|txt)$/i
 const IMAGE_EXTENSIONS = /\.(jpe?g|png|gif)(?:$|[?#])/i
-const MAX_RECONNECT_ATTEMPTS = 5
 
 const CONTENT = {
   zh: {
     title: '订单沟通', subtitle: '围绕委托订单发送消息与参考附件', orders: '相关订单', ordersHint: '最近 50 条',
     refresh: '刷新订单', loadingOrders: '正在加载订单...', retry: '重试', unknownUser: '未知用户',
-    emptyOrders: '暂无可沟通的订单', emptyOrdersHint: '提交委托后，订单会显示在这里。', createCommission: '发起委托',
+    emptyOrders: '暂无可沟通的订单', emptyOrdersHint: '提交委托后，订单会显示在这里。', createCommission: '发起委托', dmTitle: '私信',
     backToOrders: '返回订单列表', attachFile: '添加附件', loadingMessages: '正在加载消息...', loadingOlder: '正在加载...', loadOlder: '加载更早消息', noMessages: '还没有消息',
     noMessagesHint: '发送第一条消息，开始沟通具体需求。', me: '我', imageAttachment: '图片附件', attachment: '附件',
     uploading: '正在发送 {count} 个附件...', placeholder: '输入消息，Enter 发送，Shift + Enter 换行', sending: '发送中...',
@@ -297,7 +322,7 @@ const CONTENT = {
   en: {
     title: 'Order Messages', subtitle: 'Discuss commission details and exchange reference files', orders: 'Related Orders', ordersHint: 'Latest 50',
     refresh: 'Refresh orders', loadingOrders: 'Loading orders...', retry: 'Try again', unknownUser: 'Unknown user',
-    emptyOrders: 'No orders to discuss', emptyOrdersHint: 'Your order will appear here after a commission is submitted.', createCommission: 'Start a commission',
+    emptyOrders: 'No orders to discuss', emptyOrdersHint: 'Your order will appear here after a commission is submitted.', createCommission: 'Start a commission', dmTitle: 'Messages',
     backToOrders: 'Back to orders', attachFile: 'Add attachment', loadingMessages: 'Loading messages...', loadingOlder: 'Loading...', loadOlder: 'Load earlier messages', noMessages: 'No messages yet',
     noMessagesHint: 'Send the first message to start discussing the brief.', me: 'Me', imageAttachment: 'Image attachment', attachment: 'Attachment',
     uploading: 'Sending {count} attachment(s)...', placeholder: 'Write a message. Enter to send, Shift + Enter for a new line', sending: 'Sending...',
@@ -320,6 +345,8 @@ export default {
     return {
       currentUser: getCurrentUser(),
       orders: [],
+      // 无订单的私信线程（order_id=0），来自 GET /chat/threads
+      dmThreads: [],
       selectedOrder: null,
       currentThread: null,
       messages: [],
@@ -403,6 +430,8 @@ export default {
       event.currentTarget.hidden = true
     },
     async loadOrders() {
+      // 私信线程随订单一起刷新，失败不影响订单展示
+      this.loadDmThreads()
       this.loadingOrders = true
       this.ordersError = ''
       try {
@@ -416,6 +445,51 @@ export default {
         this.ordersError = error.message
       } finally {
         this.loadingOrders = false
+      }
+    },
+    // 拉取私信线程列表，只保留无订单（order_id=0）的会话，避免与订单列表重复
+    async loadDmThreads() {
+      try {
+        const data = await apiRequest(API_ENDPOINTS.CHAT_THREADS, { showError: false })
+        const threads = Array.isArray(data?.threads) ? data.threads : []
+        this.dmThreads = threads.filter((thread) => !Number(thread.order_id))
+      } catch {
+        // 私信列表加载失败静默处理，不影响订单与聊天主流程
+      }
+    },
+    // 点击侧边栏私信线程：线程已存在，直接复用会话面板打开，无需再创建
+    async selectDmThread(thread) {
+      if (!thread?.thread_id) return
+      const nonce = ++this.selectionNonce
+      this.stopPolling()
+      this.activeArtistUid = 0
+      this.selectedOrder = null
+      this.currentThread = null
+      this.messages = []
+      this.hasOlderMessages = false
+      this.messagesError = ''
+      this.loadingThread = true
+      try {
+        this.currentThread = thread
+        // 无订单私信：用线程信息合成会话入口，复用会话面板展示
+        this.selectedOrder = {
+          order_id: thread.order_id || null,
+          order_no: thread.order_no || '',
+          title: '',
+          status: '',
+          created_at: thread.created_at,
+          counterparty: { nickname: thread.other_user_name || '', avatar_url: '' }
+        }
+        await this.loadMessages()
+        if (nonce !== this.selectionNonce) return
+        await this.markAsRead(thread.thread_id)
+        if (nonce !== this.selectionNonce) return
+        thread.unread_count = 0
+        this.startPolling()
+      } catch (error) {
+        if (nonce === this.selectionNonce) this.messagesError = error.message
+      } finally {
+        if (nonce === this.selectionNonce) this.loadingThread = false
       }
     },
     async openRouteOrder(orderNo) {
@@ -766,7 +840,11 @@ export default {
     },
     connectWebSocket() {
       if (this.ws?.readyState === WebSocket.OPEN || this.ws?.readyState === WebSocket.CONNECTING) return
-      if (!getAccessToken()) return
+      if (!getAccessToken()) {
+        // 无令牌无法发起连接，回到未连接状态，避免停在「连接中...」
+        this.connectionStatus = 'disconnected'
+        return
+      }
       this.connectionStatus = 'connecting'
       try {
         this.ws = new WebSocket(this.buildWsUrl())
@@ -790,7 +868,8 @@ export default {
         }
       }
       this.ws.onerror = () => {
-        this.connectionStatus = 'error'
+        // 只标记连接状态，不改显示状态——onerror 后必定跟随 onclose，由 onclose 统一驱动状态，
+        // 避免短暂闪断时状态栏误显示「连接错误」
         this.wsConnected = false
       }
       this.ws.onclose = (event) => {
@@ -804,10 +883,10 @@ export default {
           this.refreshTokenAndReconnect()
           return
         }
-        if (!event.wasClean && this.reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+        if (!event.wasClean) {
+          // 异常断开：不限次数自动重连（指数退避封顶 30s），
+          // 后端重启/网络恢复后自动回连，不再停留在「连接错误」
           this.attemptReconnect()
-        } else if (this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-          this.connectionStatus = 'error'
         } else {
           this.connectionStatus = 'disconnected'
         }
@@ -824,7 +903,7 @@ export default {
             // 拉取权威消息数据（含附件字段），随后标记已读
             this.loadMessages({ silent: true }).then(() => this.markAsRead())
           } else {
-            // 其他会话有新消息时刷新订单列表，让排序与时间保持最新
+            // 其他会话有新消息时刷新订单与私信列表，让排序、时间与未读数保持最新
             this.loadOrders()
           }
           break
@@ -855,27 +934,26 @@ export default {
     },
     attemptReconnect() {
       this.reconnectAttempts++
-      const delay = Math.min(1000 * 2 ** this.reconnectAttempts, 30000) // 指数退避
+      // 指数退避封顶 30s；指数本身也封顶，避免 attempts 无限增长导致 2**n 溢出
+      const delay = Math.min(1000 * 2 ** Math.min(this.reconnectAttempts, 5), 30000)
       this.connectionStatus = 'connecting'
       this.reconnectTimer = window.setTimeout(() => this.connectWebSocket(), delay)
     },
     async refreshTokenAndReconnect() {
-      const refreshToken = getRefreshToken()
-      if (!refreshToken) return
+      if (!getRefreshToken()) {
+        // 无刷新令牌无法自动恢复，回到未连接状态，由用户手动重连或重新登录
+        this.connectionStatus = 'disconnected'
+        return
+      }
       this.refreshingToken = true
       try {
-        const data = await apiRequest(API_ENDPOINTS.AUTH_REFRESH, {
-          method: 'POST',
-          body: { refresh_token: refreshToken },
-          showError: false,
-          retryAuth: false
-        })
-        if (updateTokens(data?.tokens)) {
-          this.reconnectAttempts = 0
-          window.setTimeout(() => this.connectWebSocket(), 500)
-        }
+        // 刷新机制统一走 utils/auth 的单飞 refreshSession，避免与 apiRequest 的 401 刷新竞争
+        await refreshSession()
+        this.reconnectAttempts = 0
+        window.setTimeout(() => this.connectWebSocket(), 500)
       } catch {
         // 刷新失败时保持未连接状态，用户可手动重连
+        this.connectionStatus = 'disconnected'
       } finally {
         this.refreshingToken = false
       }
@@ -945,10 +1023,12 @@ export default {
 .sidebar-state p, .message-state p, .conversation-empty p { margin: 0; }
 .error-state { color: #B91C1C; }
 .text-button, .text-link { border: 0; background: none; color: var(--primary-color); font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; transition: var(--transition); }
-.order-list { height: calc(100% - 76px); overflow-y: auto; }
+.sidebar-scroll { height: calc(100% - 76px); overflow-y: auto; }
 .order-item { width: 100%; display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: center; gap: 11px; padding: 14px 16px; border: 0; border-bottom: 1px solid #E5E7EB; background: transparent; color: inherit; text-align: left; cursor: pointer; transition: var(--transition); }
 .order-item:hover, .order-item.active { background: #fff; }
 .order-item.active { box-shadow: inset 3px 0 var(--accent-color); }
+.dm-title { margin: 0; padding: 12px 16px 4px; color: var(--text-muted); font-size: 0.75rem; }
+.unread-badge { min-width: 18px; padding: 2px 6px; border-radius: 9px; background: #EF4444; color: #fff; font-size: 0.68rem; font-weight: 700; text-align: center; }
 .avatar { position: relative; width: 42px; height: 42px; display: inline-grid; place-items: center; overflow: hidden; border-radius: 50%; background: #F0F0F0; color: var(--text-dark); font-size: 0.8rem; font-weight: 800; }
 .avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .order-copy { min-width: 0; display: grid; gap: 3px; }

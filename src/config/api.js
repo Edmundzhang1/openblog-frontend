@@ -153,6 +153,12 @@ export const API_ENDPOINTS = {
   
   // GET - 获取当前站点配置
   SITE_CONFIG: '/site/config',
+
+  // GET - 公开作品画廊（分页 page/page_size，可按 category 过滤）
+  GALLERY: '/gallery',
+
+  // GET - 平台主题预设（公开，仅启用中的）
+  THEME_PRESETS: '/theme-presets',
   
   // ---------------- 画师后台相关 ----------------
   // PATCH - 更新DIY配置（需画师权限）
@@ -221,6 +227,24 @@ export const API_ENDPOINTS = {
   // PATCH - 修改用户主页路径 slug
   // Body: { slug }，格式 ^[a-z0-9_-]{2,50}$
   ADMIN_USER_SLUG: (uid) => `/admin/users/${uid}/slug`,
+
+  // PATCH - 设置画师是否在名录中展示
+  // Body: { directory_visible }
+  ADMIN_USER_DIRECTORY: (uid) => `/admin/users/${uid}/directory`,
+
+  // GET - 平台作品库（分页 page/page_size）
+  // POST - 新增平台作品 Body: { image_url, intro, sort_order? }
+  ADMIN_WORKS: '/admin/works',
+
+  // DELETE - 删除平台作品
+  ADMIN_WORK: (id) => `/admin/works/${id}`,
+
+  // 主题预设管理（GET 全部含停用 / POST 新建）
+  // Body: { name, primary_color, primary_dark, secondary_color, accent_color, bg_light, is_active, sort_order }
+  ADMIN_THEME_PRESETS: '/admin/theme-presets',
+
+  // PUT/DELETE - 单个主题预设
+  ADMIN_THEME_PRESET: (id) => `/admin/theme-presets/${id}`,
 
   // 黑名单管理
   ADMIN_BLACKLIST: '/admin/blacklist',
@@ -296,13 +320,14 @@ export const DEFAULT_HEADERS = {
   'Content-Type': 'application/json'
 }
 
-// 获取带认证的请求头
+// 获取带认证的请求头（无 token 时不附带空 Authorization）
 export function getAuthHeaders() {
   const token = localStorage.getItem('furest-token')
-  return {
-    ...DEFAULT_HEADERS,
-    'Authorization': token ? `Bearer ${token}` : ''
+  const headers = { ...DEFAULT_HEADERS }
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
   }
+  return headers
 }
 
 // 是否需要携带凭证（cookie）

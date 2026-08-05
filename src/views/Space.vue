@@ -1,33 +1,36 @@
 <template>
-  <!-- 
+  <!--
     Space.vue - 极简透明壳
     只负责：1) 获取画师数据  2) 向子组件注入数据  3) 渲染子路由
     不渲染任何 UI，保持原有页面画风
+    注意：必须有单一根节点，否则 App.vue 的 <transition> 无法正确完成离场过渡，
+    会导致从空间页跳转其他路由时目标页空白。
   -->
-  
-  <!-- 错误状态：该用户未开通画师空间 -->
-  <div v-if="error" class="space-error">
-    <div class="error-content fade-in">
-      <h2>🔍 空间未找到</h2>
-      <p>{{ error }}</p>
-      <router-link to="/" class="btn btn-primary">返回首页</router-link>
+  <div class="space-shell">
+    <!-- 错误状态：该用户未开通画师空间 -->
+    <div v-if="error" class="space-error">
+      <div class="error-content fade-in">
+        <h2>🔍 空间未找到</h2>
+        <p>{{ error }}</p>
+        <router-link to="/" class="btn btn-primary">返回首页</router-link>
+      </div>
     </div>
-  </div>
 
-  <router-view v-else-if="!loading" />
+    <router-view v-else-if="!loading" />
 
-  <!-- 加载状态（仅首次加载时显示，不影响整体布局） -->
-  <div v-else class="space-loading fade-in">
-    <span>加载中...</span>
+    <!-- 加载状态（仅首次加载时显示，不影响整体布局） -->
+    <div v-else class="space-loading fade-in">
+      <span>加载中...</span>
+    </div>
   </div>
 </template>
 
 <script>
-import { ref, computed, onMounted, watch, provide } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, provide } from 'vue'
 import { useRoute } from 'vue-router'
 import { apiRequest, eventBus } from '../utils/eventBus.js'
 import { getCurrentUser, isAuthenticated } from '../utils/auth.js'
-import { setViewingPersonalization, configFromBackend } from '../utils/personalization.js'
+import { setViewingPersonalization, clearViewingPersonalization, configFromBackend } from '../utils/personalization.js'
 
 export default {
   name: 'Space',
@@ -162,17 +165,15 @@ export default {
     
     // ==================== 方法 ====================
     
-    // 拉取空间 DIY 配置并写入运行时（静默失败，空配置忽略）
+    // 拉取空间 DIY 配置并写入运行时（失败/空配置也进入查看态，空间回退白色默认主题）
     const fetchPageConfig = async () => {
       try {
         const raw = await apiRequest(`/api/v1/space/${props.slug}/page-config`, { showError: false })
-        // 成功且返回非空对象时才应用（configFromBackend 对空/异常结构返回 null）
-        const config = configFromBackend(raw)
-        if (config) {
-          setViewingPersonalization(config)
-        }
+        // configFromBackend 对空/异常结构返回 null → 空间使用白色默认主题
+        setViewingPersonalization(configFromBackend(raw))
       } catch (err) {
-        // 失败/为空时静默忽略，不影响空间展示
+        // 拉取失败同样按未自定义处理，保证空间不沿用平台主题
+        setViewingPersonalization(null)
       }
     }
     
@@ -188,6 +189,8 @@ export default {
         await new Promise(resolve => setTimeout(resolve, 300))
         artistData.value = { ...MOCK_ARTIST_DATA, slug: props.slug }
         eventBus.emit('space-artist-loaded', { uid: 0, slug: props.slug, role: MOCK_ARTIST_DATA.role })
+        // Mock 空间无 DIY 配置，进入查看态并使用白色默认主题
+        setViewingPersonalization(null)
         loading.value = false
         return
       }
@@ -235,6 +238,11 @@ export default {
     
     onMounted(() => {
       fetchSpaceData()
+    })
+
+    // 离开空间壳（跳出 /@slug 路由）：清除查看态，恢复平台主题/静态默认
+    onBeforeUnmount(() => {
+      clearViewingPersonalization()
     })
     
     // 监听 slug 变化（当访问不同画师空间时）

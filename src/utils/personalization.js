@@ -28,6 +28,8 @@
  * - 'personalization-preview-changed' detail: { active: boolean }
  */
 import { PERSONALIZATION_IMAGES } from '../config/assets.js'
+import { API_ENDPOINTS } from '../config/api.js'
+import { apiRequest } from './eventBus.js'
 
 const STORAGE_KEY = 'space_personalization'
 const PRESETS_KEY = 'space_theme_presets'
@@ -202,7 +204,8 @@ export function getPersonalization() {
     const draft = getPreviewDraft()
     if (draft) return draft
   }
-  if (viewingConfig) return clone(viewingConfig)
+  // 空间查看态：空间主有配置用配置，否则白色默认（不回退到查看者本人的存档）
+  if (viewingActive) return viewingConfig ? clone(viewingConfig) : buildDefaultConfig()
   return getSavedPersonalization()
 }
 
@@ -214,7 +217,7 @@ export function savePersonalization(config) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(config))
     // 本人保存配置时同步刷新访客查看配置，避免主页读到旧的查看缓存
-    if (viewingConfig) {
+    if (viewingActive) {
       viewingConfig = mergeWithDefaults(config)
     }
     dispatchChanged(clone(getPersonalization()))
@@ -229,25 +232,46 @@ export function savePersonalization(config) {
 
 // 运行时内存中的"当前查看的配置"（访客模式，不写入 localStorage）
 let viewingConfig = null
+// 是否处于空间查看态（无论空间主是否有自定义配置）；
+// 空间配色只看空间主的设置，与平台主题完全隔离
+let viewingActive = false
 
 /**
  * 设置当前查看的空间配置（访客打开 /@slug 时由 Space.vue 调用）
  * - 只写入内存变量，不动 localStorage 中的本人配置
+ * - 立即套用空间配色：空间主有自定义用自定义，否则回退白色默认主题；
+ *   绝不沿用平台主题（平台主题只作用于平台页面）
  * - 派发 personalization-changed，detail 为当前生效的配置
- * @param {object|null} config 后端拉取的配置（configFromBackend 之后的 camelCase 结构），传 null 清除
+ * @param {object|null} config 后端拉取的配置（configFromBackend 之后的 camelCase 结构），传 null 使用白色默认
  */
 export function setViewingPersonalization(config) {
+  viewingActive = true
   viewingConfig = config && typeof config === 'object' ? mergeWithDefaults(config) : null
+  const effective = viewingConfig || buildDefaultConfig()
+  applyTheme(effective.theme, effective.site)
+  applyBackground(effective.background)
   dispatchChanged(clone(getPersonalization()))
 }
 
 /**
- * 清除访客查看配置（离开空间页时可调用）
+ * 清除访客查看配置（离开空间壳 Space.vue 时调用）
+ * 离开后恢复平台主题（若 admin 已应用）；未设置平台主题则移除行内变量回到静态默认
  */
 export function clearViewingPersonalization() {
-  if (!viewingConfig) return
+  if (!viewingActive) return
+  viewingActive = false
   viewingConfig = null
+  // 先派发事件再套用主题：本函数在 Space.vue 卸载期间调用，此时子组件（SpaceHome）
+  // 的 personalization-changed 监听器仍然存活，会按事件 detail 重新套用主题；
+  // 最后执行的必须是我们自己的主题恢复，否则会被监听器的默认主题覆盖
   dispatchChanged(clone(getPersonalization()))
+  if (platformTheme) {
+    applyTheme(mapKeys(platformTheme, THEME_FIELD_MAP, 'fromBackend'))
+  } else {
+    removeInlineThemeVars()
+  }
+  // 空间的自定义背景（图片/渐变）也不能带出到平台页面
+  applyBackground(buildDefaultConfig().background)
 }
 
 /**
@@ -289,6 +313,71 @@ export function applyTheme(theme = {}, site = {}) {
     root.setProperty('--font-body', site.fontFamily)
     root.setProperty('--font-heading', site.fontFamily)
   }
+}
+
+// ==================== 平台主题 ====================
+
+// 移除 applyTheme 写入的行内 CSS 变量，恢复静态 CSS 默认值
+function removeInlineThemeVars() {
+  if (typeof document === 'undefined') return
+  const root = document.documentElement.style
+  root.removeProperty('--primary-color')
+  root.removeProperty('--primary-dark')
+  root.removeProperty('--secondary-color')
+  root.removeProperty('--accent-color')
+  root.removeProperty('--bg-light')
+}
+
+// 管理后台应用的全平台主题（snake_case，来自 GET /site/home 的 platform_theme），
+// 只作用于平台页面；空间页面的配色由空间主决定（默认白色）
+let platformTheme = null
+
+/**
+ * 应用平台主题到文档 CSS 变量并记为基准主题
+ * 当前正处于空间查看态时只记录不套用（空间配色归空间主）
+ * @param {object} theme { primary_color, primary_dark, secondary_color, accent_color, bg_light }
+ */
+export function applyPlatformTheme(theme = {}) {
+  if (typeof document === 'undefined') return
+  const defaults = buildDefaultConfig().theme
+  platformTheme = {
+    primary_color: safeColor(theme.primary_color, defaults.primaryColor),
+    primary_dark: safeColor(theme.primary_dark, defaults.primaryDark),
+    secondary_color: safeColor(theme.secondary_color, defaults.secondaryColor),
+    accent_color: safeColor(theme.accent_color, defaults.accentColor),
+    bg_light: safeColor(theme.bg_light, defaults.bgLight)
+  }
+  if (!viewingActive) {
+    applyTheme(mapKeys(platformTheme, THEME_FIELD_MAP, 'fromBackend'))
+  }
+}
+
+/**
+ * 清除平台主题：移除行内 CSS 变量，恢复静态 CSS 默认值
+ * 未应用过平台主题时为无操作
+ */
+export function clearPlatformTheme() {
+  if (!platformTheme) return
+  platformTheme = null
+  removeInlineThemeVars()
+}
+
+/**
+ * 路由级主题同步（由 router.afterEach 调用）：
+ * - 空间路由：无操作，空间配色由 Space.vue 的查看态逻辑（setViewingPersonalization）负责
+ * - 非空间路由：已应用平台主题则重新套用（覆盖装修页/预览残留的行内变量），
+ *   否则移除行内变量回到静态默认；同时重置 body 背景，
+ *   避免空间/预览的背景图片或渐变泄漏到平台页面
+ * @param {boolean} isSpaceRoute
+ */
+export function applyRouteTheme(isSpaceRoute) {
+  if (isSpaceRoute) return
+  if (platformTheme) {
+    applyTheme(mapKeys(platformTheme, THEME_FIELD_MAP, 'fromBackend'))
+  } else {
+    removeInlineThemeVars()
+  }
+  applyBackground(buildDefaultConfig().background)
 }
 
 /**
@@ -407,6 +496,32 @@ const BUILT_IN_PRESETS = [
 function loadCustomPresets() {
   const list = safeParse(localStorage.getItem(PRESETS_KEY))
   return Array.isArray(list) ? list : []
+}
+
+// 平台预设（管理后台发布的主题，GET /theme-presets），缓存 Promise，静默失败返回 []
+let platformPresetsPromise = null
+
+/**
+ * 获取平台主题预设（snake_case -> 与内置预设一致的 camelCase 结构）
+ * @returns {Promise<Array>} [{ name, primaryColor, primaryDark, secondaryColor, accentColor, bgLight }]
+ */
+export function fetchPlatformPresets() {
+  if (!platformPresetsPromise) {
+    platformPresetsPromise = apiRequest(API_ENDPOINTS.THEME_PRESETS, { auth: false, showError: false })
+      .then((data) => {
+        const list = Array.isArray(data?.list) ? data.list : []
+        return list.map(preset => ({
+          name: preset.name,
+          primaryColor: preset.primary_color,
+          primaryDark: preset.primary_dark,
+          secondaryColor: preset.secondary_color,
+          accentColor: preset.accent_color,
+          bgLight: preset.bg_light
+        }))
+      })
+      .catch(() => [])
+  }
+  return platformPresetsPromise
 }
 
 /**

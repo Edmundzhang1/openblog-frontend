@@ -9,7 +9,7 @@
 
     <section class="commission-section">
       <div class="container commission-shell">
-        <div v-if="currentUser?.role !== 'CLIENT'" class="notice notice-error">
+        <div v-if="!['CLIENT', 'ARTIST'].includes(currentUser?.role)" class="notice notice-error">
           {{ copy.clientOnly }}
         </div>
 
@@ -254,7 +254,7 @@ const COPY = {
     uploadHint: '点击或拖拽图片到这里',
     uploadLimit: 'JPG、PNG 或 GIF，单张不超过 10MB，最多 9 张',
     removeFile: '移除文件',
-    clientOnly: '只有委托人账号可以提交新委托。画师和管理员仍可在订单与消息页面处理已有事务。',
+    clientOnly: '只有委托人和画师账号可以提交新委托。',
     chooseArtistError: '请选择画师',
     chooseTypeError: '请选择委托类型',
     descriptionTooLong: '组合后的需求内容超过 5000 字，请精简描述或细节。',
@@ -279,7 +279,7 @@ const COPY = {
     uploadHint: 'Click or drag reference images here',
     uploadLimit: 'JPG, PNG, or GIF; up to 10MB each and 9 files total',
     removeFile: 'Remove file',
-    clientOnly: 'Only client accounts can submit a new commission. Artists and administrators can still manage existing work from Orders and Messages.',
+    clientOnly: 'Only client and artist accounts can submit a new commission.',
     chooseArtistError: 'Choose an artist first.',
     chooseTypeError: 'Choose a commission type first.',
     descriptionTooLong: 'The combined brief exceeds 5,000 characters. Shorten the description or notes.',
@@ -365,7 +365,7 @@ export default {
     }
   },
   mounted() {
-    if (this.currentUser?.role === 'CLIENT') this.loadArtists()
+    if (['CLIENT', 'ARTIST'].includes(this.currentUser?.role)) this.loadArtists()
   },
   methods: {
     emptyForm() {

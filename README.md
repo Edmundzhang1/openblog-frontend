@@ -1,159 +1,61 @@
-# openblog-frontend
+# OpenBlog Frontend
 
 ## 仓库定位
 
-OpenBlog 前端仓库，负责博客站点的页面、交互和前端展示逻辑。
+OpenBlog 的 Vue 3 前端子仓，包含公开展示、委托提交、订单跟踪、订单聊天和管理后台。正式联调与发布由 OpenBlog 主仓统一编排。
 
 ## 快速开始
 
-### 1. 克隆仓库
+推荐在主仓根目录启动完整 Docker 环境：
 
 ```bash
-git clone https://github.com/Edmundzhang1/openblog-frontend.git
-cd openblog-frontend
+make stack-up
 ```
 
-### 2. 检查环境
-
-确保已安装 Node.js 16+：
-
-```bash
-node --version
-```
-
-如果未安装，请前往 https://nodejs.org/ 下载并安装 LTS 版本。
-
-### 3. 配置环境变量
-
-```bash
-cp .env.example .env
-```
-
-根据需要编辑 `.env` 文件，主要配置项：
-- `VITE_API_BASE_URL`：后端 API 地址（默认：`http://127.0.0.1:8080`）
-- `VITE_DEV_PORT`：开发服务器端口（默认：`3000`）
-
-### 4. 安装依赖
-
-```bash
-make install
-```
-
-或使用 npm 直接安装：
-
-```bash
-npm install
-```
-
-安装过程可能需要几分钟，请耐心等待。
-
-### 5. 启动开发服务器
-
-```bash
-make dev
-```
-
-或使用 npm：
-
-```bash
-npm run dev
-```
-
-启动成功后，会显示如下信息：
-
-```
-  VITE v5.x.x  ready in xxx ms
-
-  ➜  Local:   http://localhost:3000/
-  ➜  Network: http://192.168.x.x:3000/
-```
-
-打开浏览器访问 http://127.0.0.1:3000 即可看到前端页面。
-
-### 6. 联调后端（可选）
-
-如需与后端联调，请确保：
-1. 后端服务已启动（默认地址：http://127.0.0.1:8080）
-2. `.env` 文件中的 `VITE_API_BASE_URL` 指向正确的后端地址
-3. 前端会自动代理 `/api` 和 `/uploads` 请求到后端
-
----
+统一入口为 `http://127.0.0.1:8000`。只调试前端时，可在本目录执行 `make dev`，该命令使用 `node:24-alpine` 容器在 `http://127.0.0.1:3000` 启动 Vite。
 
 ## 环境文件
 
-- 使用 `.env.example` 作为本地环境变量样板。
-- 首次开发前复制为 `.env`，再按本地需要调整。
-- 主要配置项：
-  - `VITE_API_BASE_URL`：后端 API 地址
-  - `VITE_DEV_PORT`：开发服务器端口（默认 3000）
+环境变量样板见 `.env.example`：
 
----
+- `VITE_API_BASE_URL`：浏览器可见的 API 地址；默认留空并使用同源网关。
+- `VITE_DEV_PROXY_TARGET`：Vite 开发服务器的后端代理目标。
+- `VITE_DEV_PORT`：前端开发端口，默认 `3000`。
+
+本地私有配置写入 `.env`，不要提交真实密钥或个人环境地址。
 
 ## 常用命令
 
 ```bash
-make install    # 安装依赖
-make dev        # 启动开发服务器
-make check      # 执行项目检查
-npm run build   # 生产构建
-npm run preview # 预览生产构建
+make dev       # 使用 Docker 启动 Vite 开发服务器
+make check     # 在一次性 Node 容器中安装依赖并生产构建
+npm run build  # 仅在已准备好 Node 环境时直接构建
 ```
 
-- `make dev`：启动前端本地开发服务，默认访问 http://127.0.0.1:3000
-- `make check`：执行前端仓库的基础检查（包含构建验证）
-
----
+`make check` 不会在宿主机创建 `node_modules`。
 
 ## 上传代码
 
-```bash
-make check
-git status
-git add .
-git commit -m "feat: <变更摘要>"
-git push origin main
-```
-
-- 上传前先执行 `make check`。
-- 推荐使用 `feat:`、`fix:`、`docs:`、`chore:` 作为提交前缀。
-- 默认直接推送到 `main`：`git push origin main`。
-- 不要使用 `git push --force` 覆盖 `main` 历史。
-
----
+在本子仓创建分支、完成修改并执行 `make check`。提交只包含前端自身的源码、配置和锁文件；构建产物与本地环境文件不得提交。推送稳定 commit 后，再到主仓更新 `apps/frontend` 的子模块指针。
 
 ## 更新代码
 
-```bash
-git status
-git stash push -u
-git checkout main
-git pull --ff-only
-git stash pop
-```
-
-- 如果当前没有未提交改动，可以直接执行 `git checkout main` 和 `git pull --ff-only`。
-- 如果 `git pull --ff-only` 失败，先检查是否有未推送的本地提交，不要用强推覆盖远端。
-
----
+从主仓协作时先更新主仓，再执行 `make init` 同步固定的子模块版本。只在前端子仓独立工作时，按团队约定拉取目标分支并处理本地改动，不要直接覆盖未提交工作。
 
 ## 版本发布
 
-- `openblog-frontend` 不单独打版本 tag，也不单独创建 Release 页面。
-- 前端可发布状态以稳定 commit 的形式推送到 `main`。
-- 当该 commit 通过前端自身检查后，由主仓更新 `apps/frontend` 子模块指针并发布 OpenBlog 集成快照。
-- 正式版本发布说明统一参考 `https://github.com/Edmundzhang1/OpenBlog/blob/main/docs/deployment.md`。
-
----
+前端子仓不单独创建正式版本或 Release。可发布 commit 由主仓集成，主仓通过 `make check`、`make snapshot` 和 tag 固定前后端组合。
 
 ## 本地服务约定
 
-- 本地默认访问地址为 `http://127.0.0.1:3000`
-- 主仓联调时，主仓会默认把前端流量转发到该地址
-- 技术栈：Vue 3 + Vite + Vue Router
-
----
+- Vite 开发服务：`http://127.0.0.1:3000`
+- 主仓统一网关：`http://127.0.0.1:8000`
+- 开发时 `/api`、`/uploads` 与 `/ws` 由 Vite 或主仓网关转发到后端
+- 生产镜像由 Nginx 提供静态文件与 SPA 路由回退
 
 ## 相关文档
 
-- OpenBlog 主仓架构说明：`https://github.com/Edmundzhang1/OpenBlog/blob/main/docs/architecture.md`
-- OpenBlog 主仓协作流程：`https://github.com/Edmundzhang1/OpenBlog/blob/main/docs/workflow.md`
+- 主仓 [README](../../README.md)
+- [架构说明](../../docs/architecture.md)
+- [协作流程](../../docs/workflow.md)
+- [部署与回滚](../../docs/deployment.md)

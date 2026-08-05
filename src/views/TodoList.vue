@@ -297,6 +297,16 @@ import {
   getDailyNoteAPI,
   saveDailyNoteAPI
 } from '../api/todo.js'
+import {
+  getSchedulesAPI,
+  createScheduleAPI,
+  updateScheduleAPI,
+  deleteScheduleAPI
+} from '../api/calendar.js'
+
+// 排单 ↔ calendar 事件约定：content 以该前缀开头，后跟 JSON（style_id/quantity/note/status）
+const COMMISSION_MARKER = '@c:'
+const COMMISSION_EVENT_TYPE = 2
 
 const STORAGE_KEYS = {
   // 画风/工作量已迁移到 /api/v1/todo/*；STYLES/MAX_WORKLOAD 仅作 403 回退（本地模式）使用
@@ -495,8 +505,6 @@ export default {
     },
 
     async loadData() {
-      // 客户排单保持 localStorage（后端无对应接口）
-      this.loadCommissions()
       this.dataLoading = true
       try {
         const [workloadRes, stylesRes] = await Promise.all([getWorkloadAPI(), getArtStylesAPI()])
@@ -517,16 +525,112 @@ export default {
       } finally {
         this.dataLoading = false
       }
+      // 排单已接入后端 calendar 接口，仅本地回退模式用 localStorage
+      if (this.useLocalFallback) {
+        this.loadCommissions()
+      } else {
+        await this.loadMonthCommissions()
+        await this.migrateLocalCommissions()
+      }
     },
-    
-    // 客户排单：localStorage 读写（后端无对应接口，保持不动）
+
+    // 客户排单：仅本地回退模式（无画师权限）使用 localStorage
     loadCommissions() {
       const commissions = localStorage.getItem(STORAGE_KEYS.COMMISSIONS)
       this.commissions = commissions ? JSON.parse(commissions) : []
     },
-    
+
     saveCommissions() {
       localStorage.setItem(STORAGE_KEYS.COMMISSIONS, JSON.stringify(this.commissions))
+    },
+
+    // 加载当前显示月份的排单（后端 calendar 接口，只管理 type=2 且带标记的排单事件）
+    async loadMonthCommissions() {
+      if (this.useLocalFallback) return
+      const year = this.currentDate.getFullYear()
+      const month = this.currentDate.getMonth() + 1
+      try {
+        const res = await getSchedulesAPI(year, month)
+        const list = Array.isArray(res?.data?.list) ? res.data.list : []
+        this.commissions = list
+          .filter(e => Number(e.type) === COMMISSION_EVENT_TYPE && typeof e.content === 'string' && e.content.startsWith(COMMISSION_MARKER))
+          .map(e => this.eventToCommission(e))
+      } catch (error) {
+        showToast(error.message || this.tt('排单加载失败', 'Failed to load commissions'), 'error')
+        this.commissions = []
+      }
+    },
+
+    // calendar 事件 → 排单对象
+    eventToCommission(event) {
+      let extra = {}
+      try {
+        extra = JSON.parse(String(event.content || '').slice(COMMISSION_MARKER.length)) || {}
+      } catch {
+        extra = {}
+      }
+      return {
+        id: event.id,
+        date: event.start_time ? String(event.start_time).split('T')[0] : '',
+        styleId: extra.style_id ?? null,
+        clientName: event.title || '',
+        quantity: Number(extra.quantity) || 1,
+        note: extra.note || '',
+        status: extra.status || 'pending'
+      }
+    },
+
+    // 排单对象 → calendar 事件 payload（与 SpaceHome 的读取格式保持一致）
+    buildEventPayload({ clientName, date, styleId, quantity, note, status }) {
+      const style = this.styles.find(s => s.id === styleId)
+      return {
+        title: clientName,
+        content: COMMISSION_MARKER + JSON.stringify({
+          style_id: styleId,
+          quantity: Number(quantity) || 1,
+          note: note || '',
+          status: status || 'pending'
+        }),
+        start_time: date,
+        type: COMMISSION_EVENT_TYPE,
+        color: style ? style.color : '',
+        is_all_day: true
+      }
+    },
+
+    // 一次性迁移：旧 localStorage 排单上传到 calendar 接口（失败保留 key 以便下次重试）
+    async migrateLocalCommissions() {
+      const raw = localStorage.getItem(STORAGE_KEYS.COMMISSIONS)
+      if (!raw) return
+      let items
+      try {
+        items = JSON.parse(raw)
+      } catch {
+        return
+      }
+      if (!Array.isArray(items) || items.length === 0) {
+        localStorage.removeItem(STORAGE_KEYS.COMMISSIONS)
+        return
+      }
+      // 已存在于后端的排单（同日期+客户+画风）直接跳过，避免重试时重复导入
+      const existing = new Set(this.commissions.map(c => `${c.date}|${c.clientName}|${c.styleId}`))
+      const remaining = []
+      for (const item of items) {
+        const key = `${item.date}|${item.clientName}|${item.styleId}`
+        if (existing.has(key)) continue
+        try {
+          await createScheduleAPI(this.buildEventPayload({ ...item, status: item.status || 'pending' }))
+          existing.add(key)
+        } catch {
+          remaining.push(item)
+        }
+      }
+      if (remaining.length === 0) {
+        localStorage.removeItem(STORAGE_KEYS.COMMISSIONS)
+      } else {
+        localStorage.setItem(STORAGE_KEYS.COMMISSIONS, JSON.stringify(remaining))
+      }
+      await this.loadMonthCommissions()
     },
     
     // 本地模式（403 回退）：画风/工作量仍走 localStorage
@@ -558,6 +662,8 @@ export default {
       const newDate = new Date(this.currentDate)
       newDate.setMonth(newDate.getMonth() + delta)
       this.currentDate = newDate
+      // 排单按月从后端加载，切换月份后重新拉取
+      this.loadMonthCommissions()
     },
     
     selectDate(dateStr, day) {
@@ -586,40 +692,85 @@ export default {
     },
     
     // 排单操作
-    addCommission() {
+    async addCommission() {
       const style = this.styles.find(s => s.id === this.newCommission.styleId)
       const currentWorkload = this.calculateDayWorkload(this.selectedDateCommissions)
       const newWorkload = currentWorkload + (style.days * this.newCommission.quantity)
-      
+
       if (newWorkload > this.maxWorkload) {
         if (!confirm('添加此排单将超过每日工作量限制，是否继续？')) {
           return
         }
       }
-      
-      const commission = {
-        id: Date.now(),
-        date: this.selectedDate,
-        ...this.newCommission,
-        status: 'pending'
+
+      // 本地回退模式：保持原 localStorage 行为
+      if (this.useLocalFallback) {
+        const commission = {
+          id: Date.now(),
+          date: this.selectedDate,
+          ...this.newCommission,
+          status: 'pending'
+        }
+        this.commissions.push(commission)
+        this.saveCommissions()
+        this.newCommission = { clientName: '', styleId: '', quantity: 1, note: '' }
+        this.showOverloadWarning = false
+        return
       }
-      
-      this.commissions.push(commission)
-      this.saveCommissions()
-      this.newCommission = { clientName: '', styleId: '', quantity: 1, note: '' }
-      this.showOverloadWarning = false
+
+      const payload = this.buildEventPayload({
+        clientName: this.newCommission.clientName,
+        date: this.selectedDate,
+        styleId: this.newCommission.styleId,
+        quantity: this.newCommission.quantity,
+        note: this.newCommission.note,
+        status: 'pending'
+      })
+      try {
+        const res = await createScheduleAPI(payload)
+        if (res?.data?.id) {
+          this.commissions.push(this.eventToCommission({ ...payload, id: res.data.id }))
+        } else {
+          // 响应未返回新建事件 id：重新拉取当月排单
+          await this.loadMonthCommissions()
+        }
+        this.newCommission = { clientName: '', styleId: '', quantity: 1, note: '' }
+        this.showOverloadWarning = false
+      } catch (error) {
+        showToast(error.message || this.tt('排单添加失败', 'Failed to add commission'), 'error')
+      }
     },
-    
-    deleteCommission(id) {
-      if (confirm('确定删除这个排单吗？')) {
+
+    async deleteCommission(id) {
+      if (!confirm('确定删除这个排单吗？')) return
+      // 本地回退模式：保持原 localStorage 行为
+      if (this.useLocalFallback) {
         this.commissions = this.commissions.filter(c => c.id !== id)
         this.saveCommissions()
+        return
+      }
+      try {
+        await deleteScheduleAPI(id)
+        this.commissions = this.commissions.filter(c => c.id !== id)
+      } catch (error) {
+        showToast(error.message || this.tt('排单删除失败', 'Failed to delete commission'), 'error')
       }
     },
-    
-    toggleStatus(commission) {
-      commission.status = commission.status === 'completed' ? 'pending' : 'completed'
-      this.saveCommissions()
+
+    async toggleStatus(commission) {
+      const newStatus = commission.status === 'completed' ? 'pending' : 'completed'
+      // 本地回退模式：保持原 localStorage 行为
+      if (this.useLocalFallback) {
+        commission.status = newStatus
+        this.saveCommissions()
+        return
+      }
+      try {
+        await updateScheduleAPI(commission.id, this.buildEventPayload({ ...commission, status: newStatus }))
+        commission.status = newStatus
+      } catch (error) {
+        showToast(error.message || this.tt('状态更新失败', 'Failed to update status'), 'error')
+      }
     },
     
     checkOverload() {

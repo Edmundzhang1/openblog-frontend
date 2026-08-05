@@ -39,6 +39,7 @@
 <script>
 import { inject } from 'vue'
 import { FilePlus2, MessageCircle } from '@lucide/vue'
+import { fetchPlatformPages } from '../utils/platformPages'
 
 const CONTACT_CONTENT = {
   zh: {
@@ -131,7 +132,9 @@ export default {
   data() {
     return {
       contacts: [],
-      faqs: []
+      faqs: [],
+      // 平台配置的联系页内容（platform_pages.platform_contact，{ zh, en }），获取失败保持 null 使用内置内容
+      platformContact: null
     }
   },
   computed: {
@@ -139,12 +142,17 @@ export default {
       return this.i18n.getLocale()
     },
     content() {
-      return CONTACT_CONTENT[this.locale]
+      return this.contentFor(this.locale)
     }
   },
   mounted() {
     this.applyLocaleContent(this.locale)
     window.addEventListener('locale-changed', this.handleLocaleChange)
+    // 拉取平台配置的页面内容，失败或缺省时静默回退到内置内容
+    fetchPlatformPages().then(pages => {
+      this.platformContact = pages?.platform_contact || null
+      this.applyLocaleContent(this.locale)
+    })
   },
   beforeUnmount() {
     window.removeEventListener('locale-changed', this.handleLocaleChange)
@@ -153,8 +161,14 @@ export default {
     handleLocaleChange(event) {
       this.applyLocaleContent(event.detail)
     },
+    // 合并指定语言的内容：平台配置优先，缺省字段回落到内置默认
+    contentFor(locale) {
+      const base = CONTACT_CONTENT[locale]
+      const override = this.platformContact?.[locale]
+      return override ? { ...base, ...override } : base
+    },
     applyLocaleContent(locale) {
-      const content = CONTACT_CONTENT[locale]
+      const content = this.contentFor(locale)
       this.contacts = content.contacts
       this.faqs = content.faqs
     }

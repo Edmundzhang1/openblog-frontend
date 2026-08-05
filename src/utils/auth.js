@@ -1,3 +1,5 @@
+import { API_ENDPOINTS, DEFAULT_HEADERS, getApiUrl, WITH_CREDENTIALS } from '../config/api.js'
+
 const STORAGE_KEYS = {
   TOKEN: 'furest-token',
   REFRESH_TOKEN: 'furest-refresh-token',
@@ -60,7 +62,51 @@ export function updateTokens(tokens) {
   if (tokens.refresh_token) {
     localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, tokens.refresh_token)
   }
+  emitAuthChanged()
   return true
+}
+
+// ==================== 滑动续期（refresh token 轮换） ====================
+// 模块级单飞 Promise：并发触发刷新时共享同一次请求，保证全局最多一个 refresh
+// 请求在途。后端 refresh token 为一次性（jti 经 Redis SetNX 消费），并发刷新会互相失效。
+let refreshingPromise = null
+
+async function doRefreshSession() {
+  const refreshToken = getRefreshToken()
+  if (!refreshToken) {
+    throw new Error('登录已过期，请重新登录')
+  }
+  // 必须绕开 apiRequest 直接使用 fetch，否则会递归进 401 刷新重试逻辑
+  let json = null
+  try {
+    const response = await fetch(getApiUrl(API_ENDPOINTS.AUTH_REFRESH), {
+      method: 'POST',
+      headers: { ...DEFAULT_HEADERS },
+      credentials: WITH_CREDENTIALS ? 'include' : 'same-origin',
+      body: JSON.stringify({ refresh_token: refreshToken })
+    })
+    json = await response.json().catch(() => null)
+    if (!response.ok) {
+      throw new Error(json?.message || json?.error || '登录状态刷新失败')
+    }
+    if (!json || json.code !== 0 || !updateTokens(json.data?.tokens)) {
+      throw new Error(json?.message || '登录状态刷新失败')
+    }
+  } catch (error) {
+    // 任何失败（网络错误 / 非 200 / envelope code != 0）都视为会话失效，清空本地会话
+    clearSession()
+    throw error
+  }
+  return json.data.tokens
+}
+
+export function refreshSession() {
+  if (!refreshingPromise) {
+    refreshingPromise = doRefreshSession().finally(() => {
+      refreshingPromise = null
+    })
+  }
+  return refreshingPromise
 }
 
 export function getCurrentUser() {
@@ -72,7 +118,7 @@ export function isAuthenticated() {
 }
 
 export function isAdmin(user = getCurrentUser()) {
-  return user?.role === 'admin'
+  return String(user?.role || '').toUpperCase() === 'ADMIN'
 }
 
 export function isArtist(user = getCurrentUser()) {
@@ -95,6 +141,9 @@ export function clearSession() {
   emitAuthChanged()
 }
 
-export function getPostLoginRoute(user, fallback = '/todo') {
-  return isAdmin(user) ? '/admin' : fallback
+export function getPostLoginRoute(user, fallback = '/') {
+  if (isAdmin(user)) return '/admin'
+  // 登录后默认进入自己的空间主页（slug 默认等于 UID）
+  if (user?.uid) return `/@${user.slug || user.uid}`
+  return fallback
 }

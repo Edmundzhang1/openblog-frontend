@@ -151,7 +151,7 @@ export default {
 
       try {
         const res = await getPublicMomentsAPI(slug)
-        const list = Array.isArray(res.data) ? res.data : (res.data?.items || [])
+        const list = Array.isArray(res.data) ? res.data : (res.data?.items || res.data?.list || [])
         this.moments = list
           .filter(m => !m.visibility || m.visibility === 'public')
           .map(m => ({

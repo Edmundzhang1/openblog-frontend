@@ -180,7 +180,7 @@ export default {
       const cta = this.heroSection?.cta_button
       return {
         text: cta?.text || this.content.defaultCtaText,
-        link: cta?.link || '/commission'
+        link: cta?.link || '/artists'
       }
     },
     heroStyle() {

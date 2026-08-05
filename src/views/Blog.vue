@@ -94,6 +94,7 @@
 
 <script>
 import { inject } from 'vue'
+import { fetchPlatformPages } from '../utils/platformPages'
 
 const BLOG_CONTENT = {
   zh: {
@@ -237,7 +238,9 @@ export default {
       activeTab: 'all',
       loading: false,
       hasMore: true,
-      selectedPostId: null
+      selectedPostId: null,
+      // 平台配置的动态页内容（platform_pages.platform_blog，{ zh, en }），获取失败保持 null 使用内置内容
+      platformBlog: null
     }
   },
   computed: {
@@ -245,7 +248,19 @@ export default {
       return this.i18n.getLocale()
     },
     content() {
-      return BLOG_CONTENT[this.locale]
+      const base = BLOG_CONTENT[this.locale]
+      const override = this.platformBlog?.[this.locale]
+      if (!override || !Array.isArray(override.tabs) || !Array.isArray(override.posts)) {
+        return base
+      }
+      // 分类展示名由 tabs 派生，其余 UI 文案沿用内置内容
+      const tabLabels = {}
+      override.tabs.forEach(tab => { tabLabels[tab.key] = tab.label })
+      return {
+        ...base,
+        tabs: override.tabs,
+        posts: override.posts.map(post => ({ ...post, category: tabLabels[post.categoryKey] || post.category || '' }))
+      }
     },
     tabs() {
       return this.content.tabs
@@ -260,6 +275,12 @@ export default {
     selectedPost() {
       return this.posts.find(post => post.id === this.selectedPostId) || null
     }
+  },
+  mounted() {
+    // 拉取平台配置的页面内容，失败或缺省时静默回退到内置内容
+    fetchPlatformPages().then(pages => {
+      this.platformBlog = pages?.platform_blog || null
+    })
   },
   methods: {
     parseDate(dateStr) {
